@@ -1,4 +1,5 @@
 import { parseCandles } from './indicator.js';
+import { fetchOandaCandles, fetchOandaQuotes } from './oanda.js';
 
 const BIQUOTE_INTERVALS = {
   '1min': '1m', '5min': '5m', '15min': '15m', '30min': '30m',
@@ -23,6 +24,7 @@ export function parseBiquoteCandles(payload, symbol, timeframe) {
 }
 
 export async function fetchCandles(source, symbol, timeframe, key, signal, size = 500) {
+  if (source === 'oanda') return fetchOandaCandles(key, symbol, timeframe, signal, size);
   let url;
   if (source === 'biquote') {
     const params = new URLSearchParams({ interval: BIQUOTE_INTERVALS[timeframe], limit: String(Math.min(size, 1000)) });
@@ -39,6 +41,7 @@ export async function fetchCandles(source, symbol, timeframe, key, signal, size 
 }
 
 export async function fetchWatchlistQuotes(source, symbols, key, signal) {
+  if (source === 'oanda') return fetchOandaQuotes(key, symbols, signal);
   let url;
   if (source === 'biquote') {
     const params = new URLSearchParams();

@@ -8,10 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261123b">
+  <link rel="stylesheet" href="styles.css?v=20261123c">
   <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js" defer></script>
-  <script type="module" src="./src/app.js?v=20261123b"></script>
+  <script type="module" src="./src/app.js?v=20261123c"></script>
 </head>
 <body>
   <header class="topbar">
@@ -37,8 +37,9 @@
         </div>
         <div class="terminal-body">
           <div class="chart-column">
-            <div class="chart-heading"><div><div class="chart-title"><span id="pair-title">EURUSD</span> <span class="pair-tag">FOREX</span></div><div class="chart-subtitle" id="pair-description">Euro / US Dollar · 4 hours</div></div><div class="chart-price"><strong id="last-price">—</strong><span id="price-change">Connect data to begin</span></div></div>
-            <div class="chart-shell"><div id="chart"></div><canvas id="overlays" aria-hidden="true"></canvas><div class="chart-message" id="chart-message"><div class="message-icon">↗</div><strong>Your chart is ready</strong><span>Connect your market data to start exploring.</span><button id="connect-button">Connect data <span>↗</span></button></div></div>
+            <div class="chart-heading"><div><div class="chart-title"><span id="pair-title">EURUSD</span> <span class="pair-tag">FOREX</span></div><div class="chart-subtitle" id="pair-description">Euro / US Dollar · 4 hours</div></div><div class="chart-price"><strong id="last-price">—</strong><span id="candle-clock">Candle close unavailable</span><span id="price-change">Connect data to begin</span></div></div>
+            <div class="drawing-toolbar"><label for="drawing-tool">Draw</label><select id="drawing-tool"><option value="cursor">Cursor</option><option value="trend">Trend line</option><option value="horizontal">Horizontal line</option><option value="vertical">Vertical line</option><option value="rectangle">Rectangle</option><option value="fib">Fib retracement</option><option value="long">Long position</option><option value="short">Short position</option></select><button id="undo-drawing" type="button">Undo drawing</button><span id="drawing-status" aria-live="polite">Drawings are for analysis only; no orders are placed.</span></div>
+            <div class="chart-shell"><div id="chart"></div><canvas id="overlays" aria-hidden="true"></canvas><canvas id="drawings" aria-label="Drawing area"></canvas><div class="chart-message" id="chart-message"><div class="message-icon">↗</div><strong>Your chart is ready</strong><span>Connect your market data to start exploring.</span><button id="connect-button">Connect data <span>↗</span></button></div></div>
             <div class="chart-footer"><span><span class="gold-dot"></span> CURRENCY PROS SMC <span class="muted"> / CORE OVERLAYS</span></span><span>Prices shown in UTC</span></div>
           </div>
           <aside class="insights">
@@ -71,11 +72,19 @@
   <dialog id="settings">
     <form id="settings-form">
       <div class="dialog-top"><div><div class="eyebrow">DATA CONNECTION</div><h2>Connect your data<span>.</span></h2></div><button type="button" class="close-button" id="close-settings" aria-label="Close">×</button></div>
-      <p>biquote provides free candles and tick volume, with limited rolling history. Twelve Data is also available with your own API key.</p>
-      <label for="data-provider">Market data provider</label><select id="data-provider"><option value="biquote">biquote · tick volume, no key</option><option value="twelvedata">Twelve Data · API key</option></select>
+      <p>Choose your data source. OANDA requires your own account and token.</p>
+      <label for="data-provider">Market data provider</label><select id="data-provider"><option value="biquote">biquote · tick volume, no key</option><option value="oanda">OANDA · account and token</option><option value="twelvedata">Twelve Data · API key</option></select>
+      <div id="oanda-fields" hidden>
+        <label for="oanda-environment">OANDA environment</label><select id="oanda-environment"><option value="practice">Practice</option><option value="live">Live</option></select>
+        <label for="oanda-account">Account ID</label><input id="oanda-account" autocomplete="off" placeholder="OANDA account ID">
+        <label for="oanda-token">Personal API token</label><input id="oanda-token" type="password" autocomplete="off" placeholder="OANDA API token">
+        <p class="privacy-note">OANDA tokens can access your trading accounts, not just prices. Only enter a token on a device you trust. It stays in this tab's memory and is sent directly to OANDA; it is cleared when you reload or disconnect. Scripts and extensions in this browser may access it.</p>
+        <button id="oanda-disconnect" class="remove-key" type="button">Disconnect OANDA</button>
+      </div>
       <div id="key-fields"><label for="api-key">Twelve Data API key</label><input id="api-key" type="password" autocomplete="off" placeholder="Enter your API key">
       <p class="privacy-note">Your key stays in this browser’s local storage and is sent directly to Twelve Data. It is not hidden from anyone with access to this browser. Use a restricted key if available.</p></div>
-      <div class="dialog-actions"><a href="https://twelvedata.com/" target="_blank" rel="noopener">Get a Twelve Data key ↗</a><button type="submit">Save & connect</button></div>
+      <p id="connection-error" class="connection-error" role="alert" hidden></p>
+      <div class="dialog-actions"><a href="https://twelvedata.com/" target="_blank" rel="noopener">Get a Twelve Data key ↗</a><button id="save-connection" type="submit">Save & connect</button></div>
       <button type="button" class="remove-key" id="remove-key">Remove saved key</button>
     </form>
   </dialog>
