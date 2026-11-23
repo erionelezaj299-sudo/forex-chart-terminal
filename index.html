@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Pivot | Forex workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js" defer></script>
+  <script type="module" src="./src/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="."><span class="brand-mark">◈</span> pivot<span class="brand-dot">.</span></a>
+    <span class="top-divider"></span><span class="workspace-label">WORKSPACE</span>
+    <nav><span class="nav-active">Charts</span></nav>
+    <div class="top-right"><span class="market-pill"><i></i> Forex workspace</span><button id="settings-button" class="icon-button" aria-label="Data settings" title="Data settings">⚙</button><span class="avatar">P</span></div>
+  </header>
+  <main class="layout">
+    <aside class="rail" aria-label="Workspace navigation">
+      <div class="rail-icon selected" title="Chart">▥</div>
+      <div class="rail-icon" title="Analysis">◈</div>
+      <div class="rail-icon" title="Watchlist">▤</div>
+      <div class="rail-spacer"></div><div class="rail-icon">◉</div>
+    </aside>
+    <section class="workspace">
+      <div class="page-heading"><div><div class="eyebrow">YOUR TRADING WORKSPACE <span>✦</span></div><h1>Market overview<span>.</span></h1><p>A clearer view of the markets, all in one place.</p></div><div class="heading-meta"><span class="live-dot"></span> DATA BY TWELVE DATA</div></div>
+      <div class="terminal">
+        <div class="terminal-toolbar">
+          <div class="symbol-wrap"><label class="sr-only" for="symbol">Currency pair</label><select id="symbol"></select><span class="select-chevron">⌄</span></div>
+          <div class="toolbar-separator"></div><div id="timeframes" class="timeframes" aria-label="Timeframe"></div>
+          <div class="toolbar-spacer"></div><span class="data-status" id="data-status"><i></i> Not connected</span><button class="refresh-button" id="refresh" title="Refresh data">↻ <span>Refresh</span></button>
+        </div>
+        <div class="terminal-body">
+          <div class="chart-column">
+            <div class="chart-heading"><div><div class="chart-title"><span id="pair-title">EURUSD</span> <span class="pair-tag">FOREX</span></div><div class="chart-subtitle" id="pair-description">Euro / US Dollar · 4 hours</div></div><div class="chart-price"><strong id="last-price">—</strong><span id="price-change">Connect data to begin</span></div></div>
+            <div class="chart-shell"><div id="chart"></div><canvas id="overlays" aria-hidden="true"></canvas><div class="chart-message" id="chart-message"><div class="message-icon">↗</div><strong>Your chart is ready</strong><span>Connect your market data to start exploring.</span><button id="connect-button">Connect data <span>↗</span></button></div></div>
+            <div class="chart-footer"><span><span class="gold-dot"></span> CURRENCY PROS SMC <span class="muted"> / CORE OVERLAYS</span></span><span>Prices shown in UTC</span></div>
+          </div>
+          <aside class="insights">
+            <div class="panel-heading"><div><div class="eyebrow">YOUR ANALYSIS</div><h2>Trade checklist</h2></div><span class="panel-icon">✳</span></div>
+            <div class="score-card"><div class="score-ring"><strong id="score">0</strong><small>/ 100</small></div><div><div class="score-title">Trade score</div><p>Build your own<br>confluence checklist</p></div><span class="manual-tag">MANUAL</span></div>
+            <div class="checklist" id="checklist"></div>
+            <div class="panel-note">Your checklist is manual, just like the original Pine inputs. It is not a trade signal.</div>
+            <div class="section-rule"></div>
+            <div class="section-head"><div><div class="eyebrow">MARKET STRUCTURE</div><h3>Current chart</h3></div><span class="small-tag">SMC</span></div>
+            <div class="stat-row"><span>Latest structure</span><strong id="structure">—</strong></div>
+            <div class="stat-row"><span>Fib 0.71</span><strong id="fib-value">—</strong></div>
+            <div class="stat-row"><span>4H range</span><strong id="pd-4h">—</strong></div>
+            <div class="stat-row"><span>1D range</span><strong id="pd-1d">—</strong></div>
+            <div class="section-rule"></div>
+            <div class="section-head"><div><div class="eyebrow">INDICATOR</div><h3>Overlay details</h3></div><span class="small-tag gold">BETA</span></div>
+            <p class="indicator-note">Structure, Fibonacci and fair value gaps are approximations of the supplied script. Scanner and volume profile are not available.</p>
+            <a class="learn-link" href="README.md" target="_blank" rel="noopener">Read limitations <span>↗</span></a>
+          </aside>
+        </div>
+      </div>
+      <div class="bottom-caption"><span>Built for a little more clarity.</span><span>Market data may be delayed · Not financial advice</span></div>
+    </section>
+  </main>
+  <dialog id="settings">
+    <form id="settings-form">
+      <div class="dialog-top"><div><div class="eyebrow">DATA CONNECTION</div><h2>Connect your data<span>.</span></h2></div><button type="button" class="close-button" id="close-settings" aria-label="Close">×</button></div>
+      <p>Use your own Twelve Data API key to load real forex candles. Access to pairs, gold, history and refresh rates depends on your plan.</p>
+      <label for="api-key">Twelve Data API key</label><input id="api-key" type="password" autocomplete="off" placeholder="Enter your API key" required>
+      <p class="privacy-note">Your key stays in this browser’s local storage and is sent directly to Twelve Data. It is not hidden from anyone with access to this browser. Use a restricted key if available.</p>
+      <div class="dialog-actions"><a href="https://twelvedata.com/" target="_blank" rel="noopener">Get an API key ↗</a><button type="submit">Save & connect</button></div>
+      <button type="button" class="remove-key" id="remove-key">Remove saved key</button>
+    </form>
+  </dialog>
+</body>
+</html>
