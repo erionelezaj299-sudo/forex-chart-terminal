@@ -66,19 +66,20 @@ export function calculateStructure(candles, settings = {}) {
     if (i >= 2 && c.high < candles[i - 2].low) gaps.push({ start: i - 2, end: i + o.fvgExtension, top: candles[i - 2].low, bottom: c.high });
   }
   if (!highs.length || !lows.length) return { labels, fractals, gaps: gaps.slice(-200), bos: null, fib: null, liquidity: null };
-  const findBreak = (swings, direction) => {
+  const findBreak = (swings, direction, after = -1) => {
     for (const swing of swings.slice(0, 21)) {
       for (let j = swing.index + 1; j < candles.length; j++) {
         const c = candles[j], range = c.high - c.low;
         const strong = range === 0 || (direction === 'bull' ? (c.close - c.low) / range : (c.high - c.close) / range) >= o.closeThreshold / 100;
         if (strong && (direction === 'bull' ? c.close > swing.price : c.close < swing.price)) {
-          return { start: swing.index, end: j, price: swing.price, direction };
+          if (j > after) return { start: swing.index, end: j, price: swing.price, direction };
+          break;
         }
       }
     }
     return null;
   };
-  const bull = o.bias !== 'Bear' ? findBreak(highs, 'bull') : null, bear = o.bias !== 'Bull' ? findBreak(lows, 'bear') : null;
+  const bull = o.bias !== 'Bear' ? findBreak(highs, 'bull') : null, bear = o.bias !== 'Bull' ? findBreak(lows, 'bear', bull?.end ?? -1) : null;
   const bos = bear && (!bull || bear.end > bull.end) ? bear : bull;
   if (!bos) return { labels, fractals, gaps: gaps.slice(-200), bos: null, fib: null, liquidity: null };
   let liquidity = null;
@@ -94,15 +95,20 @@ export function calculateStructure(candles, settings = {}) {
   }
   const opposite = (bos.direction === 'bull' ? lows : highs).find(p => p.index < bos.end);
   if (!opposite) return { labels, fractals, gaps: gaps.slice(-200), bos, fib: null, liquidity };
-  let extremeIndex = bos.end;
-  for (let i = bos.end + 1; i < candles.length; i++) {
-    if (bos.direction === 'bull' ? candles[i].high >= candles[extremeIndex].high : candles[i].low <= candles[extremeIndex].low) extremeIndex = i;
-  }
+  const extremeIndex = findFibExtreme(candles, bos.end, bos.direction);
   const zero = bos.direction === 'bull' ? candles[extremeIndex].high : candles[extremeIndex].low;
   const one = opposite.price;
   const fib = { start: opposite.index, extremeIndex, zero, one, level: zero + o.fibRatio * (one - zero) };
   const tolerance = Math.abs(one - zero) * o.fvgTolerance / 100;
   return { labels, fractals, gaps: gaps.slice(-200).filter(g => (!o.fvgActiveLeg || g.start >= fib.start) && (!o.fvgNearFib || (g.bottom <= fib.level + tolerance && g.top >= fib.level - tolerance))), bos, fib, liquidity };
+}
+
+export function findFibExtreme(candles, start, direction) {
+  let extremeIndex = candles.length - 1;
+  for (let i = start; i < candles.length; i++) {
+    if (direction === 'bull' ? candles[i].high > candles[extremeIndex].high : candles[i].low < candles[extremeIndex].low) extremeIndex = i;
+  }
+  return extremeIndex;
 }
 
 export function parseCandles(values) {
@@ -158,4 +164,44 @@ export function rangeStatus(result, price) {
   if (!result.fib) return 'Unavailable';
   const mid = (result.fib.zero + result.fib.one) / 2;
   return price > mid ? 'Premium' : price < mid ? 'Discount' : 'Neutral';
+}
+
+// Separate from chart structure: this follows the Pine calc_bos_fib_range function.
+export function calculateHigherTimeframeRange(candles, sensitivity, closeThreshold) {
+  let swingHigh, swingLow, high, low, direction = 0;
+  for (let i = 0; i < candles.length; i++) {
+    const p = i - sensitivity;
+    if (p >= sensitivity) {
+      const pivot = candles[p], window = candles.slice(p - sensitivity, p + sensitivity + 1);
+      if (window.every((c, j) => j === sensitivity || (j < sensitivity ? pivot.high >= c.high : pivot.high > c.high))) swingHigh = pivot.high;
+      if (window.every((c, j) => j === sensitivity || (j < sensitivity ? pivot.low <= c.low : pivot.low < c.low))) swingLow = pivot.low;
+    }
+    const c = candles[i], span = c.high - c.low;
+    const bull = swingHigh !== undefined && c.close > swingHigh && c.close > c.open && span > 0 && (c.close - c.low) / span * 100 >= closeThreshold;
+    const bear = swingLow !== undefined && c.close < swingLow && c.close < c.open && span > 0 && (c.high - c.close) / span * 100 >= closeThreshold;
+    if (bull) { low = swingLow ?? c.low; high = c.high; direction = 1; }
+    if (bear) { high = swingHigh ?? c.high; low = c.low; direction = -1; }
+    if (direction === 1 && c.high > high) high = c.high;
+    if (direction === -1 && c.low < low) low = c.low;
+  }
+  return high === undefined || low === undefined ? null : { high, low, mid: (high + low) / 2 };
+}
+
+export function higherTimeframeStatus(range, price) {
+  if (!range || !Number.isFinite(price)) return 'Unavailable';
+  return price > range.mid ? 'Premium' : price < range.mid ? 'Discount' : 'Neutral';
+}
+
+export function profileCandles(leg, minute, seconds, now = Date.now() / 1000) {
+  let fallback = 0;
+  const candles = leg.flatMap(c => {
+    const bars = minute.filter(m => m.time >= c.time && m.time < c.time + seconds);
+    const end = Math.min(c.time + seconds, Math.floor(now / 60) * 60 + 60);
+    const expected = Math.max(0, Math.ceil((end - c.time) / 60));
+    const complete = expected > 0 && bars.length === expected && bars.every((bar, i) => bar.time === c.time + i * 60);
+    if (complete) return bars;
+    fallback++;
+    return [c];
+  });
+  return { candles, fallback };
 }

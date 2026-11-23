@@ -8,9 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261123b">
   <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js" defer></script>
-  <script type="module" src="./src/app.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js" defer></script>
+  <script type="module" src="./src/app.js?v=20261123b"></script>
 </head>
 <body>
   <header class="topbar">
@@ -32,7 +33,7 @@
         <div class="terminal-toolbar">
           <div class="symbol-wrap"><label class="sr-only" for="symbol">Currency pair</label><select id="symbol"></select><span class="select-chevron">⌄</span></div>
           <div class="toolbar-separator"></div><div id="timeframes" class="timeframes" aria-label="Timeframe"></div>
-          <div class="toolbar-spacer"></div><span class="data-status" id="data-status"><i></i> Not connected</span><button class="refresh-button" id="indicator-settings-button" title="Indicator settings">⚙ <span>Indicator</span></button><button class="refresh-button" id="refresh" title="Refresh data">↻ <span>Refresh</span></button>
+          <div class="toolbar-spacer"></div><span class="data-status" id="data-status"><i></i> Not connected</span><button class="refresh-button" id="indicator-settings-button" title="Indicator settings">⚙ <span>Indicator</span></button><button class="refresh-button" id="refresh" title="Refresh data">↻ <span>Refresh</span></button><button class="refresh-button" id="fullscreen" type="button" aria-label="Enter fullscreen chart" title="Fullscreen chart">⛶ <span>Fullscreen</span></button>
         </div>
         <div class="terminal-body">
           <div class="chart-column">

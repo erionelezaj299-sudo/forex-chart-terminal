@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateStructure, calculateVolumeProfile, parseCandles, rangeStatus } from '../src/indicator.js';
+import { calculateStructure, calculateVolumeProfile, calculateHigherTimeframeRange, higherTimeframeStatus, profileCandles, findFibExtreme, parseCandles, rangeStatus } from '../src/indicator.js';
 
 test('parses UTC candles in chronological order and rejects malformed data', () => {
   const candles = parseCandles([
@@ -62,4 +62,36 @@ test('does not invent a structure when there are insufficient candles', () => {
   assert.equal(result.bos, null);
   assert.equal(result.fib, null);
   assert.equal(rangeStatus(result, 1), 'Unavailable');
+});
+
+test('higher-timeframe ranges follow directional candle breaks and extend the active extreme', () => {
+  const candles = [
+    { open: 5, high: 6, low: 4, close: 5 },
+    { open: 6, high: 8, low: 5, close: 7 },
+    { open: 5, high: 6, low: 3, close: 4 },
+    { open: 5, high: 7, low: 4, close: 6 },
+    { open: 7, high: 10, low: 6, close: 9 },
+    { open: 9, high: 12, low: 8, close: 10 },
+  ];
+  assert.deepEqual(calculateHigherTimeframeRange(candles, 1, 30), { high: 12, low: 3, mid: 7.5 });
+  assert.equal(higherTimeframeStatus(calculateHigherTimeframeRange(candles, 1, 30), 7), 'Discount');
+  assert.equal(higherTimeframeStatus(calculateHigherTimeframeRange(candles, 1, 30), 8), 'Premium');
+  const bearishClose = [...candles.slice(0, 4), { open: 10, high: 11, low: 7, close: 9 }];
+  assert.equal(calculateHigherTimeframeRange(bearishClose, 1, 30), null);
+});
+
+test('profile uses whole-bar fallback for gaps inside lower-timeframe coverage', () => {
+  const leg = [{ time: 0, high: 10, low: 0, volume: 100 }, { time: 300, high: 10, low: 0, volume: 200 }];
+  const minute = [0, 60, 120, 180, 240, 300, 360, 480, 540].map(time => ({ time, volume: 1 }));
+  const selected = profileCandles(leg, minute, 300, 600);
+  assert.equal(selected.fallback, 1);
+  assert.equal(selected.candles.length, 6);
+  assert.equal(selected.candles[5], leg[1]);
+});
+
+test('fib extreme matches Pine tie handling for the profile end bar', () => {
+  const bars = [{ high: 10, low: 0 }, { high: 10, low: 0 }, { high: 9, low: 1 }];
+  assert.equal(findFibExtreme(bars, 0, 'bull'), 0);
+  assert.equal(findFibExtreme(bars, 0, 'bear'), 0);
+  assert.equal(findFibExtreme([...bars, bars[0]], 0, 'bull'), 3);
 });

@@ -1,5 +1,6 @@
-import { calculateStructure, calculateVolumeProfile, DEFAULT_SETTINGS, rangeStatus } from './indicator.js';
+import { calculateStructure, calculateVolumeProfile, calculateHigherTimeframeRange, higherTimeframeStatus, profileCandles, DEFAULT_SETTINGS } from './indicator.js?v=20261123b';
 import { fetchCandles, fetchWatchlistQuotes } from './market-data.js';
+import { parseLiveTick, updateCurrentCandle } from './live-data.js';
 import { drawStructureLine } from './overlays.js';
 import { GROUPS } from './settings.js';
 
@@ -9,6 +10,8 @@ const intervals = [['1m','1min','1 minute'],['5m','5min','5 minutes'],['15m','15
 const $ = id => document.getElementById(id);
 let interval = '4h', data = [], structure = null, controller, chart, series, profile = null;
 let watchlistController, watchlistQuotes = {};
+let htfCandles = [null, null], latestTick = null, stream, streamState = 'connecting', refreshRunning = false;
+const intervalSeconds = { '1min': 60, '5min': 300, '15min': 900, '30min': 1800, '1h': 3600, '4h': 14400, '1day': 86400 };
 let provider = localStorage.getItem('pivot-data-provider') === 'twelvedata' ? 'twelvedata' : 'biquote';
 let options = { ...DEFAULT_SETTINGS };
 try {
@@ -131,7 +134,7 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(px - 3, py + offset); ctx.lineTo(px + 3, py + offset); ctx.lineTo(px, py + offset + tip); ctx.closePath(); ctx.fill();
   }
 }
-async function load() {
+async function load({ background = false } = {}) {
   symbolText();
   renderWatchlist();
   if (!chart) return;
@@ -139,10 +142,12 @@ async function load() {
   controller = new AbortController();
   const signal = controller.signal, symbol = select.value, key = localStorage.getItem('pivot-api-key'), source = provider;
   $('source-name').textContent = source === 'biquote' ? 'BIQUOTE' : 'TWELVE DATA';
-  series.setData([]); data = []; structure = null; profile = null; draw();
-  $('last-price').textContent = '—'; $('price-change').textContent = '—'; $('structure').textContent = '—'; $('fib-value').textContent = '—'; $('pd-4h').textContent = '—'; $('pd-1d').textContent = '—'; $('vp-status').textContent = '—'; $('data-details').textContent = '';
+  if (!background) {
+    series.setData([]); data = []; structure = null; profile = null; htfCandles = [null, null]; latestTick = null; draw();
+    $('last-price').textContent = '—'; $('price-change').textContent = '—'; $('structure').textContent = '—'; $('fib-value').textContent = '—'; $('pd-4h').textContent = '—'; $('pd-1d').textContent = '—'; $('vp-status').textContent = '—'; $('data-details').textContent = '';
+  }
   if (source === 'twelvedata' && !key) { setStatus('Not connected'); message('Your chart is ready', 'Connect your Twelve Data API key to start exploring.', true); return; }
-  setStatus('Loading'); message('Loading market data', `Fetching candles from ${source === 'biquote' ? 'biquote' : 'Twelve Data'}…`);
+  if (!background) { setStatus('Loading'); message('Loading market data', `Fetching candles from ${source === 'biquote' ? 'biquote' : 'Twelve Data'}…`); }
   try {
     const result = await fetchCandles(source, symbol, interval, key, signal);
     if (signal.aborted) return;
@@ -150,14 +155,17 @@ async function load() {
     const digits = symbol.endsWith('JPY') || symbol.startsWith('XAU') ? 3 : 5;
     series.applyOptions({ priceFormat: { type: 'price', precision: digits, minMove: 10 ** -digits } });
     series.setData(data);
-    chart.priceScale('right').applyOptions({ autoScale: true });
-    chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, data.length - 120), to: data.length + 20 });
+    if (!background) {
+      chart.priceScale('right').applyOptions({ autoScale: true });
+      chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, data.length - 120), to: data.length + 20 });
+    }
     const last = data[data.length - 1], prev = data[data.length - 2];
     $('last-price').textContent = last.close.toFixed(digits);
     $('price-change').textContent = prev ? `${last.close >= prev.close ? '+' : ''}${((last.close / prev.close - 1) * 100).toFixed(2)}% vs previous candle` : 'Latest available candle';
     $('structure').textContent = structure.bos ? `${structure.bos.direction === 'bull' ? 'Bullish' : 'Bearish'} BOS` : 'Not found';
     $('fib-value').textContent = structure.fib ? structure.fib.level.toFixed(digits) : 'Unavailable';
-    $('chart-message').hidden = true; setStatus('Data loaded', 'connected');
+    $('chart-message').hidden = true;
+    if (source === 'biquote') updateStreamStatus(); else setStatus('Snapshot · manual refresh', 'connected');
     requestAnimationFrame(() => requestAnimationFrame(draw));
     const higher = ['4h', '1day'];
     const needMinute = options.use1mPrice || (options.showVp && options.vpUseLtf && interval !== '1min');
@@ -167,16 +175,19 @@ async function load() {
     ]);
     if (signal.aborted) return;
     const minute = outcomes[2].status === 'fulfilled' ? outcomes[2].value : null;
-    const price = options.use1mPrice && minute?.length ? minute[minute.length - 1].close : last.close;
+    const price = source === 'biquote' && latestTick ? latestTick.price : options.use1mPrice && minute?.length ? minute[minute.length - 1].close : last.close;
     const details = [];
     if (options.use1mPrice && !minute) details.push(`1m price unavailable; using chart close${outcomes[2].reason ? ` (${outcomes[2].reason.message})` : ''}.`);
     outcomes.slice(0, 2).forEach((outcome, i) => {
       const element = $(i === 0 ? 'pd-4h' : 'pd-1d');
       if (!options.premiumEnabled) { element.textContent = 'Disabled'; return; }
       if (outcome.status === 'fulfilled') {
-        const range = calculateStructure(outcome.value, { ...options, sensitivity: i === 0 ? options.sensitivity4h : options.sensitivity1d });
-        element.textContent = rangeStatus(range, price);
+        htfCandles[i] = outcome.value.map(c => ({ ...c }));
+        const range = calculateHigherTimeframeRange(htfCandles[i], i === 0 ? Math.max(2, options.sensitivity4h - 1) : options.sensitivity1d, options.closeThreshold);
+        element.textContent = higherTimeframeStatus(range, price);
+        element.title = range ? `Midpoint ${range.mid.toFixed(digits)} · ${source} ${i === 0 ? '4H' : '1D'} candles` : 'No confirmed higher-timeframe BOS in available history.';
       } else {
+        htfCandles[i] = null;
         element.textContent = 'Unavailable'; element.title = outcome.reason.message;
         details.push(`${i === 0 ? '4H' : '1D'}: ${outcome.reason.message}`); setStatus('Some data unavailable', 'error');
       }
@@ -184,26 +195,22 @@ async function load() {
     if (options.showVp && structure.fib) {
       const end = options.vpEndAtExtreme ? structure.fib.extremeIndex : data.length - 1;
       const leg = data.slice(structure.fib.start, end + 1);
-      const seconds = { '1min': 60, '5min': 300, '15min': 900, '30min': 1800, '1h': 3600, '4h': 14400, '1day': 86400 }[interval];
-      let missingIntrabars = false;
-      const volumeCandles = leg.flatMap(c => {
-        if (!options.vpUseLtf || interval === '1min' || !minute) return [c];
-        const bars = minute.filter(m => m.time >= c.time && m.time < c.time + seconds);
-        if (!bars.length || minute[0].time > c.time) { missingIntrabars = true; return [c]; }
-        return bars;
-      });
+      const selected = options.vpUseLtf && interval !== '1min' && minute ? profileCandles(leg, minute, intervalSeconds[interval]) : { candles: leg, fallback: options.vpUseLtf && interval !== '1min' ? leg.length : 0 };
+      const volumeCandles = selected.candles;
       profile = calculateVolumeProfile(volumeCandles, structure.fib, options);
       if (source === 'biquote') details.push('Profile uses biquote tick counts, not traded volume.');
-      if (missingIntrabars) details.push('Some 1m history is missing; chart-bar volume is used for those bars when available.');
+      if (selected.fallback) details.push(`Incomplete 1m coverage for ${selected.fallback} chart bar(s); chart-bar volume is used, so POC is approximate.`);
       if (!minute && options.vpUseLtf && interval !== '1min') details.push(`1m intrabars unavailable; chart-bar volume is used when available${outcomes[2].status === 'rejected' ? ` (${outcomes[2].reason.message})` : ''}.`);
-      $('vp-status').textContent = profile.error ? 'Unavailable' : 'Available';
+      $('vp-status').textContent = profile.error ? 'Unavailable' : selected.fallback || source === 'biquote' ? 'Approximate' : 'Available';
       if (profile.error) details.push(`Volume profile: ${profile.error}`);
     } else $('vp-status').textContent = options.showVp ? 'No active leg' : 'Disabled';
     $('data-details').textContent = details.join(' ');
+    if (source === 'biquote' && latestTick) applyTick(latestTick);
     draw();
   } catch (error) {
     if (error.name === 'AbortError') return;
-    setStatus('Data unavailable', 'error'); message('Unable to load market data', error.message, true);
+    if (background) { setStatus('Candle refresh failed', 'error'); $('data-details').textContent = `Candle refresh failed: ${error.message}`; }
+    else { setStatus('Data unavailable', 'error'); message('Unable to load market data', error.message, true); }
   }
 }
 function updateProviderFields() {
@@ -212,6 +219,100 @@ function updateProviderFields() {
   $('api-key').required = wantsKey && !localStorage.getItem('pivot-api-key');
   $('api-key').placeholder = localStorage.getItem('pivot-api-key') ? 'Leave blank to keep saved key' : 'Enter your API key';
 }
+function updateStreamStatus() {
+  if (provider !== 'biquote') return;
+  if (streamState === 'connected' && latestTick && Date.now() / 1000 - latestTick.time <= 30) setStatus('Live · biquote', 'connected');
+  else if (streamState === 'connected') setStatus('Stream connected · awaiting fresh quote');
+  else setStatus(streamState === 'connecting' ? 'Connecting live feed' : 'Live feed unavailable', streamState === 'connecting' ? '' : 'error');
+}
+function applyTick(tick) {
+  if (provider !== 'biquote' || tick.symbol !== select.value || Date.now() / 1000 - tick.time > 30) return;
+  const updated = updateCurrentCandle(data, tick, intervalSeconds[interval]);
+  if (!updated) return;
+  if (updated.time === data[data.length - 1].time) data[data.length - 1] = updated;
+  else data.push(updated);
+  series.update(updated);
+  const digits = tick.symbol.endsWith('JPY') || tick.symbol.startsWith('XAU') ? 3 : 5;
+  $('last-price').textContent = tick.price.toFixed(digits);
+  const prev = data[data.length - 2];
+  if (prev) $('price-change').textContent = `${tick.price >= prev.close ? '+' : ''}${((tick.price / prev.close - 1) * 100).toFixed(2)}% vs previous candle`;
+  for (let i = 0; i < 2; i++) {
+    if (!htfCandles[i] || !options.premiumEnabled) continue;
+    const candles = htfCandles[i], bar = updateCurrentCandle(candles, tick, i === 0 ? 14400 : 86400);
+    if (!bar) continue;
+    if (bar.time === candles[candles.length - 1].time) candles[candles.length - 1] = bar; else candles.push(bar);
+    const range = calculateHigherTimeframeRange(candles, i === 0 ? Math.max(2, options.sensitivity4h - 1) : options.sensitivity1d, options.closeThreshold);
+    const element = $(i === 0 ? 'pd-4h' : 'pd-1d');
+    element.textContent = higherTimeframeStatus(range, tick.price);
+    element.title = range ? `Midpoint ${range.mid.toFixed(digits)} · biquote ${i === 0 ? '4H' : '1D'} candles` : 'No confirmed higher-timeframe BOS in available history.';
+  }
+  updateStreamStatus();
+}
+let watchlistFrame = 0;
+function startStream() {
+  if (stream || provider !== 'biquote') return;
+  if (!window.signalR) { streamState = 'unavailable'; updateStreamStatus(); return; }
+  const connection = new signalR.HubConnectionBuilder().withUrl('https://biquote.io/hubs/tick', { withCredentials: false }).withAutomaticReconnect().build();
+  stream = connection; streamState = 'connecting'; updateStreamStatus();
+  connection.on('ReceiveTick', raw => {
+    if (stream !== connection || provider !== 'biquote') return;
+    const tick = parseLiveTick(raw);
+    if (!tick || !symbols.includes(tick.symbol) || Date.now() / 1000 - tick.time > 30) return;
+    if (watchlistQuotes[tick.symbol]?.time > tick.time) return;
+    watchlistQuotes[tick.symbol] = { price: tick.price, stale: false, time: tick.time };
+    if (!watchlistFrame) watchlistFrame = requestAnimationFrame(() => {
+      watchlistFrame = 0;
+      document.querySelectorAll('.watchlist-row').forEach(row => setWatchlistPrice(row, row.dataset.symbol));
+    });
+    if (tick.symbol === select.value && (!latestTick || tick.time >= latestTick.time)) { latestTick = tick; applyTick(tick); }
+  });
+  connection.onreconnecting(() => { streamState = 'unavailable'; updateStreamStatus(); });
+  connection.onreconnected(async () => {
+    try { await connection.invoke('Subscribe', symbols); streamState = 'connected'; latestTick = null; updateStreamStatus(); }
+    catch (error) { streamState = 'unavailable'; updateStreamStatus(); console.error('Unable to resubscribe to the live feed:', error); }
+  });
+  connection.onclose(() => {
+    if (stream !== connection) return;
+    stream = null; streamState = 'unavailable'; updateStreamStatus();
+    if (provider === 'biquote') setTimeout(startStream, 15000);
+  });
+  (async () => {
+    try {
+      await connection.start();
+      if (stream !== connection || provider !== 'biquote') { await connection.stop(); return; }
+      await connection.invoke('Subscribe', symbols);
+      streamState = 'connected'; updateStreamStatus();
+    } catch (error) {
+      console.error('Unable to connect to the live feed:', error);
+      if (stream === connection) { stream = null; streamState = 'unavailable'; updateStreamStatus(); setTimeout(startStream, 15000); }
+      await connection.stop();
+    }
+  })();
+}
+function stopStream() {
+  const previous = stream; stream = null; latestTick = null;
+  if (previous) previous.stop().catch(error => console.error('Unable to disconnect the live feed:', error));
+}
+const terminal = document.querySelector('.terminal');
+function syncFullscreenButton() {
+  if (!$('fullscreen')) return;
+  const active = document.fullscreenElement === terminal || terminal.classList.contains('expanded');
+  $('fullscreen').setAttribute('aria-label', active ? 'Exit fullscreen chart' : 'Enter fullscreen chart');
+  $('fullscreen').title = active ? 'Exit fullscreen chart' : 'Fullscreen chart';
+  $('fullscreen').querySelector('span').textContent = active ? 'Exit fullscreen' : 'Fullscreen';
+}
+$('fullscreen')?.addEventListener('click', async () => {
+  if (terminal.classList.contains('expanded')) { terminal.classList.remove('expanded'); syncFullscreenButton(); return; }
+  try {
+    if (document.fullscreenElement === terminal) await document.exitFullscreen();
+    else await terminal.requestFullscreen();
+  } catch (error) {
+    console.info('Native fullscreen unavailable; expanding within the page:', error);
+    terminal.scrollLeft = 0; terminal.classList.add('expanded'); syncFullscreenButton();
+  }
+});
+document.addEventListener('fullscreenchange', syncFullscreenButton);
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && terminal.classList.contains('expanded')) { terminal.classList.remove('expanded'); syncFullscreenButton(); } });
 function openDataSettings() { $('data-provider').value = provider; updateProviderFields(); $('settings').showModal(); }
 $('data-provider').addEventListener('change', updateProviderFields);
 $('settings-button').addEventListener('click', openDataSettings);
@@ -225,6 +326,7 @@ $('settings-form').addEventListener('submit', event => {
   provider = $('data-provider').value;
   localStorage.setItem('pivot-data-provider', provider);
   $('api-key').value = ''; $('settings').close();
+  if (sourceChanged) { stopStream(); if (provider === 'biquote') startStream(); }
   if (sourceChanged || (newKey && provider === 'twelvedata')) resetWatchlist();
   load();
 });
@@ -269,21 +371,24 @@ $('indicator-form').addEventListener('submit', event => {
   options = next; localStorage.setItem('pivot-indicator-settings', JSON.stringify(options));
   $('indicator-settings').close(); load();
 });
+function setWatchlistPrice(row, symbol) {
+  const quote = watchlistQuotes[symbol], price = row.querySelector('.watchlist-price');
+  const stale = quote && (quote.stale || (quote.time && Date.now() / 1000 - quote.time > 300));
+  price.textContent = quote ? `${quote.price.toFixed(symbol.endsWith('JPY') || symbol.startsWith('XAU') ? 3 : 5)}${stale ? '*' : ''}` : '—';
+  row.setAttribute('aria-label', `${symbol}, ${quote ? price.textContent : 'quote unavailable'}`);
+}
 function renderWatchlist() {
   const list = $('watchlist'), scroll = list.scrollTop, filter = $('watchlist-filter').value.trim().toUpperCase();
   list.replaceChildren();
   for (const symbol of symbols.filter(value => value.includes(filter))) {
     const row = document.createElement('button'), name = document.createElement('span'), price = document.createElement('span');
-    row.type = 'button'; row.className = 'watchlist-row';
+    row.type = 'button'; row.className = 'watchlist-row'; row.dataset.symbol = symbol;
     row.classList.toggle('active', symbol === select.value);
     if (symbol === select.value) row.setAttribute('aria-current', 'true');
     name.textContent = symbol;
-    const quote = watchlistQuotes[symbol];
-    price.textContent = quote ? `${quote.price.toFixed(symbol.endsWith('JPY') || symbol.startsWith('XAU') ? 3 : 5)}${quote.stale ? '*' : ''}` : '—';
     price.className = 'watchlist-price';
-    row.setAttribute('aria-label', `${symbol}, ${quote ? price.textContent : 'quote unavailable'}`);
     row.addEventListener('click', () => { select.value = symbol; load(); });
-    row.append(name, price); list.append(row);
+    row.append(name, price); setWatchlistPrice(row, symbol); list.append(row);
   }
   if (!list.childElementCount) {
     const empty = document.createElement('div'); empty.className = 'watchlist-empty'; empty.textContent = 'No matching pairs.'; list.append(empty);
@@ -301,8 +406,10 @@ async function refreshWatchlist() {
     const result = await fetchWatchlistQuotes(source, symbols, key, request.signal);
     if (request.signal.aborted) return;
     watchlistQuotes = result;
-    const count = Object.keys(result).length, stale = Object.values(result).some(quote => quote.stale);
-    $('watchlist-status').textContent = `${source === 'biquote' ? 'biquote' : 'Twelve Data'} snapshot · ${count}/${symbols.length} available${stale ? ' · * last known' : ''}. Refresh for updates.`;
+    const count = Object.keys(result).length;
+    $('watchlist-status').textContent = source === 'biquote'
+      ? `biquote · ${count}/${symbols.length} available · updates on live ticks; * last known.`
+      : `Twelve Data snapshot · ${count}/${symbols.length} available. Refresh for updates.`;
     renderWatchlist();
   } catch (error) {
     if (error.name !== 'AbortError') $('watchlist-status').textContent = `Quotes unavailable: ${error.message}`;
@@ -321,4 +428,11 @@ $('watchlist-filter').addEventListener('input', renderWatchlist);
 $('watchlist-refresh').addEventListener('click', refreshWatchlist);
 symbolText();
 resetWatchlist();
-if (initChart()) load();
+if (initChart()) { load(); startStream(); }
+setInterval(updateStreamStatus, 10000);
+setInterval(async () => {
+  document.querySelectorAll('.watchlist-row').forEach(row => setWatchlistPrice(row, row.dataset.symbol));
+  if (provider !== 'biquote' || document.hidden || !data.length || refreshRunning) return;
+  refreshRunning = true;
+  try { await load({ background: true }); } finally { refreshRunning = false; }
+}, 60000);
