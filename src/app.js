@@ -1,12 +1,13 @@
-import { calculateStructure, calculateVolumeProfile, DEFAULT_SETTINGS, parseCandles, rangeStatus } from './indicator.js';
+import { calculateStructure, calculateVolumeProfile, DEFAULT_SETTINGS, rangeStatus } from './indicator.js';
+import { fetchCandles } from './market-data.js';
 import { GROUPS } from './settings.js';
-import { scanSetup } from './scanner.js';
 
 const currencies = { AUD: 'Australian Dollar', CAD: 'Canadian Dollar', CHF: 'Swiss Franc', EUR: 'Euro', GBP: 'British Pound', JPY: 'Japanese Yen', NZD: 'New Zealand Dollar', USD: 'US Dollar', XAU: 'Gold' };
 const symbols = ['EURUSD','GBPUSD','USDJPY','USDCHF','USDCAD','AUDUSD','NZDUSD','EURAUD','EURCAD','EURCHF','EURGBP','EURJPY','EURNZD','GBPAUD','GBPCAD','GBPCHF','GBPJPY','GBPNZD','AUDCAD','AUDCHF','AUDJPY','AUDNZD','CADCHF','CADJPY','CHFJPY','NZDCAD','NZDCHF','NZDJPY','XAUUSD'];
 const intervals = [['1m','1min','1 minute'],['5m','5min','5 minutes'],['15m','15min','15 minutes'],['30m','30min','30 minutes'],['1H','1h','1 hour'],['4H','4h','4 hours'],['1D','1day','1 day']];
 const $ = id => document.getElementById(id);
-let interval = '4h', data = [], structure = null, controller, scanController, chart, series, htf = {}, profile = null;
+let interval = '4h', data = [], structure = null, controller, chart, series, profile = null;
+let provider = localStorage.getItem('pivot-data-provider') === 'twelvedata' ? 'twelvedata' : 'biquote';
 let options = { ...DEFAULT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem('pivot-indicator-settings') || '{}');
@@ -14,7 +15,7 @@ try {
     const value = saved[key];
     if (type === 'checkbox' && typeof value === 'boolean') options[key] = value;
     else if (type === 'number' && typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max) options[key] = value;
-    else if (type === 'choice' && min.includes(String(value))) options[key] = key === 'scannerMinScore' ? Number(value) : value;
+    else if (type === 'choice' && min.includes(String(value))) options[key] = value;
     else if (type === 'color' && typeof value === 'string' && /^#[\da-f]{6}$/i.test(value)) options[key] = value;
     else if (type === 'text' && typeof value === 'string') options[key] = value;
   }
@@ -50,7 +51,7 @@ function symbolText() {
   const symbol = select.value, base = symbol.slice(0, 3), quote = symbol.slice(3);
   $('pair-title').textContent = symbol;
   $('fib-label').textContent = `Fib ${options.fibRatio}`;
-  $('pair-description').textContent = `${currencies[base]} / ${currencies[quote]} · ${intervals.find(x => x[1] === interval)[2]}`;
+  $('pair-description').textContent = `${currencies[base]} / ${currencies[quote]} · ${intervals.find(x => x[1] === interval)[2]} · ${provider === 'biquote' ? 'biquote' : 'Twelve Data'}`;
   document.querySelector('.pair-tag').textContent = base === 'XAU' ? 'METAL' : 'FOREX';
 }
 function initChart() {
@@ -101,16 +102,6 @@ function draw() {
     if (options.showFib618) line(f.start, end, f.zero + 0.618 * (f.one - f.zero), options.fibColor, label('0.618'), [], options.fibWidth);
     if (options.showFib236) line(f.start, end, f.zero + 0.236 * (f.one - f.zero), options.fibColor, label('0.236'), [], options.fibWidth);
   }
-  for (const [tf, enabled, color, width] of [['4h', options.show4h, options.color4h, options.width4h], ['1day', options.show1d, options.color1d, options.width1d]]) {
-    const f = htf[tf]?.fib;
-    if (options.premiumEnabled && enabled && f) {
-      const end = Math.floor(chart.timeScale().getVisibleLogicalRange()?.to ?? data.length + 20);
-      if (end <= data.length - 1) continue;
-      line(data.length - 1, end, f.zero, color, `${tf} high/low`, [], width);
-      line(data.length - 1, end, f.one, color, '', [], width);
-      line(data.length - 1, end, (f.zero + f.one) / 2, color, `${tf} 50%`, [4, 3], width);
-    }
-  }
   if (options.showVp && profile && !profile.error && structure.fib) {
     const right = x(data.length - 1 + options.vpOffset), width = Math.abs((x(data.length + options.vpOffset) ?? 0) - (right ?? 0));
     if (right !== null && width > 0) {
@@ -138,31 +129,25 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(px - 3, py + offset); ctx.lineTo(px + 3, py + offset); ctx.lineTo(px, py + offset + tip); ctx.closePath(); ctx.fill();
   }
 }
-async function fetchCandles(symbol, timeframe, key, signal, size = 500) {
-  const params = new URLSearchParams({ symbol: `${symbol.slice(0,3)}/${symbol.slice(3)}`, interval: timeframe, outputsize: String(size), timezone: 'UTC', apikey: key });
-  const response = await fetch(`https://api.twelvedata.com/time_series?${params}`, { signal });
-  if (!response.ok) throw new Error(`Twelve Data returned HTTP ${response.status}.`);
-  const json = await response.json();
-  if (json.status === 'error' || json.code) throw new Error(json.message || 'Twelve Data rejected the request.');
-  return parseCandles(json.values);
-}
 async function load() {
   symbolText();
   if (!chart) return;
   if (controller) controller.abort();
   controller = new AbortController();
-  const signal = controller.signal, symbol = select.value, key = localStorage.getItem('pivot-api-key');
-  series.setData([]); data = []; structure = null; htf = {}; profile = null; draw();
+  const signal = controller.signal, symbol = select.value, key = localStorage.getItem('pivot-api-key'), source = provider;
+  $('source-name').textContent = source === 'biquote' ? 'BIQUOTE' : 'TWELVE DATA';
+  series.setData([]); data = []; structure = null; profile = null; draw();
   $('last-price').textContent = '—'; $('price-change').textContent = '—'; $('structure').textContent = '—'; $('fib-value').textContent = '—'; $('pd-4h').textContent = '—'; $('pd-1d').textContent = '—'; $('vp-status').textContent = '—'; $('data-details').textContent = '';
-  if (!key) { setStatus('Not connected'); message('Your chart is ready', 'Connect your market data to start exploring.', true); return; }
-  setStatus('Loading'); message('Loading market data', 'Fetching candles from Twelve Data…');
+  if (source === 'twelvedata' && !key) { setStatus('Not connected'); message('Your chart is ready', 'Connect your Twelve Data API key to start exploring.', true); return; }
+  setStatus('Loading'); message('Loading market data', `Fetching candles from ${source === 'biquote' ? 'biquote' : 'Twelve Data'}…`);
   try {
-    const result = await fetchCandles(symbol, interval, key, signal);
+    const result = await fetchCandles(source, symbol, interval, key, signal);
     if (signal.aborted) return;
     data = result; structure = calculateStructure(data, options);
     const digits = symbol.endsWith('JPY') || symbol.startsWith('XAU') ? 3 : 5;
     series.applyOptions({ priceFormat: { type: 'price', precision: digits, minMove: 10 ** -digits } });
     series.setData(data);
+    chart.priceScale('right').applyOptions({ autoScale: true });
     chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, data.length - 120), to: data.length + 20 });
     const last = data[data.length - 1], prev = data[data.length - 2];
     $('last-price').textContent = last.close.toFixed(digits);
@@ -174,8 +159,8 @@ async function load() {
     const higher = ['4h', '1day'];
     const needMinute = options.use1mPrice || (options.showVp && options.vpUseLtf && interval !== '1min');
     const outcomes = await Promise.allSettled([
-      ...higher.map(tf => tf === interval ? Promise.resolve(result) : fetchCandles(symbol, tf, key, signal)),
-      needMinute ? (interval === '1min' ? Promise.resolve(result) : fetchCandles(symbol, '1min', key, signal, options.showVp && options.vpUseLtf ? 5000 : 1)) : Promise.resolve(null),
+      ...higher.map(tf => tf === interval ? Promise.resolve(result) : fetchCandles(source, symbol, tf, key, signal)),
+      needMinute ? (interval === '1min' ? Promise.resolve(result) : fetchCandles(source, symbol, '1min', key, signal, options.showVp && options.vpUseLtf ? 5000 : 1)) : Promise.resolve(null),
     ]);
     if (signal.aborted) return;
     const minute = outcomes[2].status === 'fulfilled' ? outcomes[2].value : null;
@@ -186,8 +171,8 @@ async function load() {
       const element = $(i === 0 ? 'pd-4h' : 'pd-1d');
       if (!options.premiumEnabled) { element.textContent = 'Disabled'; return; }
       if (outcome.status === 'fulfilled') {
-        htf[higher[i]] = calculateStructure(outcome.value, { ...options, sensitivity: i === 0 ? options.sensitivity4h : options.sensitivity1d });
-        element.textContent = rangeStatus(htf[higher[i]], price);
+        const range = calculateStructure(outcome.value, { ...options, sensitivity: i === 0 ? options.sensitivity4h : options.sensitivity1d });
+        element.textContent = rangeStatus(range, price);
       } else {
         element.textContent = 'Unavailable'; element.title = outcome.reason.message;
         details.push(`${i === 0 ? '4H' : '1D'}: ${outcome.reason.message}`); setStatus('Some data unavailable', 'error');
@@ -205,6 +190,7 @@ async function load() {
         return bars;
       });
       profile = calculateVolumeProfile(volumeCandles, structure.fib, options);
+      if (source === 'biquote') details.push('Profile uses biquote tick counts, not traded volume.');
       if (missingIntrabars) details.push('Some 1m history is missing; chart-bar volume is used for those bars when available.');
       if (!minute && options.vpUseLtf && interval !== '1min') details.push(`1m intrabars unavailable; chart-bar volume is used when available${outcomes[2].status === 'rejected' ? ` (${outcomes[2].reason.message})` : ''}.`);
       $('vp-status').textContent = profile.error ? 'Unavailable' : 'Available';
@@ -217,10 +203,25 @@ async function load() {
     setStatus('Data unavailable', 'error'); message('Unable to load market data', error.message, true);
   }
 }
-$('settings-button').addEventListener('click', () => $('settings').showModal());
-$('connect-button').addEventListener('click', () => $('settings').showModal());
+function updateProviderFields() {
+  const wantsKey = $('data-provider').value === 'twelvedata';
+  $('key-fields').hidden = !wantsKey;
+  $('api-key').required = wantsKey && !localStorage.getItem('pivot-api-key');
+  $('api-key').placeholder = localStorage.getItem('pivot-api-key') ? 'Leave blank to keep saved key' : 'Enter your API key';
+}
+function openDataSettings() { $('data-provider').value = provider; updateProviderFields(); $('settings').showModal(); }
+$('data-provider').addEventListener('change', updateProviderFields);
+$('settings-button').addEventListener('click', openDataSettings);
+$('connect-button').addEventListener('click', openDataSettings);
 $('close-settings').addEventListener('click', () => $('settings').close());
-$('settings-form').addEventListener('submit', event => { event.preventDefault(); localStorage.setItem('pivot-api-key', $('api-key').value.trim()); $('api-key').value = ''; $('settings').close(); load(); });
+$('settings-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const newKey = $('api-key').value.trim();
+  if (newKey && $('data-provider').value === 'twelvedata') localStorage.setItem('pivot-api-key', newKey);
+  provider = $('data-provider').value;
+  localStorage.setItem('pivot-data-provider', provider);
+  $('api-key').value = ''; $('settings').close(); load();
+});
 $('remove-key').addEventListener('click', () => { localStorage.removeItem('pivot-api-key'); $('api-key').value = ''; $('settings').close(); load(); });
 $('refresh').addEventListener('click', load);
 select.addEventListener('change', load);
@@ -257,55 +258,10 @@ $('indicator-form').addEventListener('submit', event => {
   const next = { ...options };
   for (const [, fields] of GROUPS) for (const [, key, type] of fields) {
     const input = document.getElementById(`setting-${key}`);
-    next[key] = type === 'checkbox' ? input.checked : type === 'number' || key === 'scannerMinScore' ? Number(input.value) : input.value;
+    next[key] = type === 'checkbox' ? input.checked : type === 'number' ? Number(input.value) : input.value;
   }
-  const names = next.scannerSymbols.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-  if (!names.length || names.length > 15 || names.some(name => !symbols.includes(name)) || new Set(names).size !== names.length) {
-    const field = document.getElementById('setting-scannerSymbols');
-    field.setCustomValidity('Enter 1–15 distinct supported symbols, separated by commas.');
-    field.reportValidity(); field.addEventListener('input', () => field.setCustomValidity(''), { once: true });
-    return;
-  }
-  next.scannerSymbols = names.join(',');
   options = next; localStorage.setItem('pivot-indicator-settings', JSON.stringify(options));
-  if (scanController) scanController.abort();
-  $('scan-results').replaceChildren(); $('scan-status').textContent = 'Settings changed · run scan again';
   $('indicator-settings').close(); load();
-});
-$('scan-button').addEventListener('click', async () => {
-  const key = localStorage.getItem('pivot-api-key');
-  if (!key) { $('scan-status').textContent = 'Connect a Twelve Data API key before scanning.'; return; }
-  if (scanController) scanController.abort();
-  scanController = new AbortController();
-  const signal = scanController.signal, scanOptions = { ...options };
-  const names = scanOptions.scannerSymbols.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-  const found = [], errors = [];
-  $('scan-button').disabled = true; $('scan-results').replaceChildren();
-  try {
-    for (const [index, symbol] of names.entries()) {
-      if (signal.aborted) return;
-      $('scan-status').textContent = `Scanning ${index + 1} of ${names.length}: ${symbol}…`;
-      try {
-        const candles = await fetchCandles(symbol, scanOptions.scannerTimeframe, key, signal);
-        const higher = scanOptions.scannerHtf === scanOptions.scannerTimeframe ? candles : await fetchCandles(symbol, scanOptions.scannerHtf, key, signal);
-        const setup = scanSetup(candles, higher, scanOptions);
-        if (setup && setup.score >= scanOptions.scannerMinScore) found.push({ symbol, ...setup });
-      } catch (error) {
-        if (error.name === 'AbortError') return;
-        errors.push(`${symbol}: ${error.message}`);
-      }
-    }
-    found.sort((a, b) => b.score - a.score);
-    for (const result of found.slice(0, scanOptions.scannerRows)) {
-      const row = document.createElement('div'), button = document.createElement('button'), direction = document.createElement('span'), score = document.createElement('strong');
-      row.className = 'scan-result'; button.type = 'button'; button.textContent = result.symbol;
-      button.addEventListener('click', () => { select.value = result.symbol; load(); });
-      direction.textContent = result.direction === 1 ? 'BUY' : 'SELL'; direction.className = result.direction === 1 ? '' : 'sell';
-      score.textContent = String(result.score); row.title = `BOS: ${result.bos}; liquidity: ${result.liquidity}; FVG: ${result.fvg}; HTF alignment: ${result.alignment}`;
-      row.append(button, direction, score); $('scan-results').append(row);
-    }
-    $('scan-status').textContent = `${found.length ? `${found.length} qualifying setups` : 'No qualifying setups'}${errors.length ? ` · ${errors.length} symbols unavailable: ${errors.join(' ')}` : ''}`;
-  } finally { $('scan-button').disabled = false; }
 });
 symbolText();
 if (initChart()) load();

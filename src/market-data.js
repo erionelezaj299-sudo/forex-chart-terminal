@@ -1,0 +1,39 @@
+import { parseCandles } from './indicator.js';
+
+const BIQUOTE_INTERVALS = {
+  '1min': '1m', '5min': '5m', '15min': '15m', '30min': '30m',
+  '1h': '1h', '4h': '4h', '1day': '1d',
+};
+
+export function parseBiquoteCandles(payload, symbol, timeframe) {
+  if (!payload || payload.symbol !== symbol || payload.interval !== BIQUOTE_INTERVALS[timeframe] || !Array.isArray(payload.bars)) {
+    throw new Error('biquote returned an unexpected symbol, timeframe, or response.');
+  }
+  return parseCandles(payload.bars.map(bar => {
+    if (typeof bar.openTime !== 'string' || !/Z$/.test(bar.openTime)) throw new Error('biquote returned an invalid UTC timestamp.');
+    if (bar.tickVolume !== undefined && bar.tickVolume !== null &&
+        (typeof bar.tickVolume !== 'number' || !Number.isFinite(bar.tickVolume) || bar.tickVolume < 0)) {
+      throw new Error('biquote returned an invalid tick volume.');
+    }
+    return {
+      datetime: bar.openTime.slice(0, -1), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+      volume: bar.tickVolume > 0 ? bar.tickVolume : undefined,
+    };
+  }));
+}
+
+export async function fetchCandles(source, symbol, timeframe, key, signal, size = 500) {
+  let url;
+  if (source === 'biquote') {
+    const params = new URLSearchParams({ interval: BIQUOTE_INTERVALS[timeframe], limit: String(Math.min(size, 1000)) });
+    url = `https://biquote.io/api/${encodeURIComponent(symbol)}/ohlc?${params}`;
+  } else if (source === 'twelvedata') {
+    const params = new URLSearchParams({ symbol: `${symbol.slice(0, 3)}/${symbol.slice(3)}`, interval: timeframe, outputsize: String(size), timezone: 'UTC', apikey: key });
+    url = `https://api.twelvedata.com/time_series?${params}`;
+  } else throw new Error('Unknown market data provider.');
+  const response = await fetch(url, { signal });
+  if (!response.ok) throw new Error(`${source === 'biquote' ? 'biquote' : 'Twelve Data'} returned HTTP ${response.status}.`);
+  const json = await response.json();
+  if (json.status === 'error' || json.code) throw new Error(json.message || 'The data provider rejected the request.');
+  return source === 'biquote' ? parseBiquoteCandles(json, symbol, timeframe) : parseCandles(json.values);
+}

@@ -20,10 +20,8 @@ export const GROUPS = [
   ]],
   ['Premium / discount', [
     ['Enable premium / discount','premiumEnabled','checkbox'], ['Use 1m price when available','use1mPrice','checkbox'],
-    ['Show 4H lines','show4h','checkbox'], ['4H sensitivity','sensitivity4h','number',2,50,1],
-    ['4H color','color4h','color'], ['4H line width','width4h','number',1,5,1],
-    ['Show 1D lines','show1d','checkbox'], ['1D sensitivity','sensitivity1d','number',2,50,1],
-    ['1D color','color1d','color'], ['1D line width','width1d','number',1,5,1],
+    ['4H sensitivity','sensitivity4h','number',2,50,1],
+    ['1D sensitivity','sensitivity1d','number',2,50,1],
   ]],
   ['Volume profile', [
     ['Show profile','showVp','checkbox'], ['Rows','vpRows','number',8,150,1], ['Use 1m intrabar volume','vpUseLtf','checkbox'],
@@ -41,13 +39,5 @@ export const GROUPS = [
     ['Show liquidity sweep','showLiquidity','checkbox'], ['Liquidity sensitivity','liquiditySensitivity','number',2,20,1],
     ['Show fractals','showFractals','checkbox'], ['Bill Williams filter','filterBW','checkbox'], ['Major swings only','majorOnly','checkbox'],
     ['Major threshold × ATR','majorThreshold','number',0.5,5,0.1], ['Major lookback','majorLookback','number',3,30,1],
-  ]],
-  ['Scanner', [
-    ['Timeframe','scannerTimeframe','choice',['1min','5min','15min','30min','1h','4h','1day']],
-    ['HTF timeframe','scannerHtf','choice',['1min','5min','15min','30min','1h','4h','1day']],
-    ['Opportunities shown','scannerRows','number',1,5,1], ['Minimum score','scannerMinScore','choice',['0','25','50','75','100']],
-    ['BOS max age','scannerBosAge','number',5,500,1], ['Liquidity lookback','scannerLiqLookback','number',3,300,1],
-    ['FVG tolerance %','scannerFvgTolerance','number',0,100,1],
-    ['Symbols (up to 15, comma-separated)','scannerSymbols','text'],
   ]],
 ];

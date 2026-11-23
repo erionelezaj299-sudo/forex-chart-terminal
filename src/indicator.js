@@ -12,12 +12,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   fvgColor: '#787b86', fvgBorder: '#363a45',
   showLiquidity: true, liquiditySensitivity: 2, showFractals: true, filterBW: true,
   majorOnly: true, majorThreshold: 1.5, majorLookback: 10,
-  premiumEnabled: true, show4h: true, show1d: true, sensitivity4h: 5, sensitivity1d: 5, use1mPrice: true,
-  color4h: '#3333ee', color1d: '#9933bb', width4h: 1, width1d: 2,
+  premiumEnabled: true, sensitivity4h: 5, sensitivity1d: 5, use1mPrice: true,
   showVp: true, vpRows: 128, vpUseLtf: true, vpEndAtExtreme: true, vpWidth: 18, vpOffset: 13, vpPoc: true,
   vpColor: '#808080', vpPocColor: '#808080', vpPocLineColor: '#000000', vpPocLineStyle: 'dashed', vpPocLineWidth: 2,
-  scannerRows: 1, scannerMinScore: 0, scannerBosAge: 50, scannerLiqLookback: 30, scannerFvgTolerance: 5,
-  scannerTimeframe: '1h', scannerHtf: '4h', scannerSymbols: 'AUDUSD,EURUSD,GBPUSD,NZDUSD,USDCAD,USDCHF,USDJPY,AUDCAD,EURAUD,EURGBP,GBPAUD,GBPCAD,GBPJPY,NZDCAD,EURJPY',
 });
 
 export function calculateStructure(candles, settings = {}) {

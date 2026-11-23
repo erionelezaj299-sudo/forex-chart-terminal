@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateStructure, calculateVolumeProfile, parseCandles, rangeStatus } from '../src/indicator.js';
-import { scanSetup, scannerLeg } from '../src/scanner.js';
 
 test('parses UTC candles in chronological order and rejects malformed data', () => {
   const candles = parseCandles([
@@ -56,24 +55,6 @@ test('volume profile refuses absent or nonpositive volume instead of inventing i
   assert.match(calculateVolumeProfile([], fib).error, /volume is unavailable/);
   assert.equal(parseCandles([{ datetime: '2024-01-02', open: 1, high: 2, low: 0, close: 1, volume: '123' }])[0].volume, 123);
   assert.throws(() => parseCandles([{ datetime: '2024-01-02', open: 1, high: 2, low: 0, close: 1, volume: '-1' }]), /invalid volume/);
-});
-
-test('scanner detects the incremental leg and scores only available conditions', () => {
-  const prices = [5,4,3,4,5,7,6,5,4,5,6,8,9,8,7];
-  const candles = prices.map((price, time) => ({ time, open: price, high: price + 0.4, low: price - 0.4, close: price + 0.2 }));
-  const opts = { sensitivity: 2 };
-  assert.equal(scannerLeg(candles, opts).at(-1).direction, 1);
-  const result = scanSetup(candles, candles, opts);
-  assert.equal(result.direction, 1);
-  assert.equal(result.bos, true);
-  assert.equal(result.liquidity, false);
-  assert.equal(result.fvg, true);
-  assert.equal(result.alignment, false);
-  assert.equal(result.score, 50);
-  const reversed = [...candles, { time: 15, open: 1.5, high: 2, low: 1, close: 1.5 }];
-  assert.equal(scannerLeg(reversed, opts).at(-1).direction, -1);
-  assert.equal(scanSetup(reversed, candles, opts).direction, -1);
-  assert.equal(scanSetup(candles.slice(0, 2), candles, opts), null);
 });
 
 test('does not invent a structure when there are insufficient candles', () => {
