@@ -43,14 +43,18 @@
           <aside class="insights">
             <div class="panel-heading"><div><div class="eyebrow">YOUR ANALYSIS</div><h2>Trade checklist</h2></div><span class="panel-icon">✳</span></div>
             <div class="score-card"><div class="score-ring"><strong id="score">0</strong><small>/ 100</small></div><div><div class="score-title">Trade score</div><p>Build your own<br>confluence checklist</p></div><span class="manual-tag">MANUAL</span></div>
+            <div class="pd-summary" aria-label="Premium and discount"><div><span>4H</span><strong id="pd-4h">—</strong></div><div><span>1D</span><strong id="pd-1d">—</strong></div></div>
             <div class="checklist" id="checklist"></div>
             <div class="panel-note">Your checklist is manual, just like the original Pine inputs. It is not a trade signal.</div>
+            <div class="section-rule"></div>
+            <div class="section-head"><div><div class="eyebrow">MARKETS</div><h3>Watchlist</h3></div><button id="watchlist-refresh" class="watchlist-refresh" type="button" aria-label="Refresh watchlist quotes" title="Refresh watchlist quotes">↻</button></div>
+            <label class="sr-only" for="watchlist-filter">Filter watchlist</label><input id="watchlist-filter" class="watchlist-filter" type="search" placeholder="Find a pair">
+            <p id="watchlist-status" class="watchlist-status" aria-live="polite">Loading quotes…</p>
+            <div id="watchlist" class="watchlist" aria-label="Currency pair watchlist"></div>
             <div class="section-rule"></div>
             <div class="section-head"><div><div class="eyebrow">MARKET STRUCTURE</div><h3>Current chart</h3></div><span class="small-tag">SMC</span></div>
             <div class="stat-row"><span>Latest structure</span><strong id="structure">—</strong></div>
             <div class="stat-row"><span id="fib-label">Fib 0.71</span><strong id="fib-value">—</strong></div>
-            <div class="stat-row"><span>4H range</span><strong id="pd-4h">—</strong></div>
-            <div class="stat-row"><span>1D range</span><strong id="pd-1d">—</strong></div>
             <div class="stat-row"><span>Volume profile</span><strong id="vp-status">—</strong></div>
             <p class="indicator-note" id="data-details"></p>
             <div class="section-rule"></div>

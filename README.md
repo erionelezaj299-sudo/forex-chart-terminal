@@ -14,6 +14,8 @@ The profile distributes each candle's reported volume proportionally over overla
 
 The checklist is manually checked and is not an automated recommendation. This software is not financial advice.
 
+The watchlist displays the supported pairs beside the chart; select a row to change charts and use the search field to filter pairs. Quotes are snapshots, not streaming prices. The refresh button retrieves all watchlist quotes; Twelve Data can charge one API credit per symbol, so its quotes are fetched only on explicit refresh. An asterisk marks a last-known biquote quote, and unavailable quotes are shown as dashes.
+
 ## Run and publish
 
 Serve this directory with any static HTTP server, then open its URL. The chart library and fonts are loaded from external CDNs; the browser needs internet access. Do not open the HTML directly as a file, because it uses JavaScript modules.

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchCandles, parseBiquoteCandles } from '../src/market-data.js';
+import { fetchCandles, fetchWatchlistQuotes, parseBiquoteCandles } from '../src/market-data.js';
 import { calculateVolumeProfile } from '../src/indicator.js';
 
 test('biquote candles use real tick counts, sorted by UTC timestamp', () => {
@@ -35,5 +35,46 @@ test('biquote requests use its interval and never send a Twelve Data key', async
     assert.match(url, /interval=1d/);
     assert.match(url, /limit=1000/);
     assert.doesNotMatch(url, /private-key/);
+  } finally { globalThis.fetch = original; }
+});
+
+test('watchlist returns provider prices and marks stale biquote quotes', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({
+    EURUSD: { mid: 1.09, stale: true, marketState: 'closed' },
+    XAUUSD: { mid: null, stale: false },
+  }) });
+  try {
+    const quotes = await fetchWatchlistQuotes('biquote', ['EURUSD', 'XAUUSD'], '', undefined);
+    assert.deepEqual(quotes, { EURUSD: { price: 1.09, stale: true } });
+  } finally { globalThis.fetch = original; }
+});
+
+test('Twelve Data watchlist handles partial failures without inventing quotes', async () => {
+  const original = globalThis.fetch;
+  let url;
+  globalThis.fetch = async value => {
+    url = new URL(value);
+    return { ok: true, json: async () => ({
+      'EUR/USD': { price: '1.1' },
+      'XAU/USD': { status: 'error', message: 'Not available' },
+    }) };
+  };
+  try {
+    const quotes = await fetchWatchlistQuotes('twelvedata', ['EURUSD', 'XAUUSD'], 'key', undefined);
+    assert.deepEqual(quotes, { EURUSD: { price: 1.1, stale: false } });
+    assert.equal(url.searchParams.get('symbol'), 'EUR/USD,XAU/USD');
+    assert.equal(url.searchParams.get('apikey'), 'key');
+  } finally { globalThis.fetch = original; }
+});
+
+test('watchlist reports missing keys and provider errors', async () => {
+  await assert.rejects(fetchWatchlistQuotes('twelvedata', ['EURUSD'], '', undefined), /API key/);
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({
+    'EUR/USD': { status: 'error', message: 'Credit limit exceeded' },
+  }) });
+  try {
+    await assert.rejects(fetchWatchlistQuotes('twelvedata', ['EURUSD'], 'key', undefined), /Credit limit exceeded/);
   } finally { globalThis.fetch = original; }
 });

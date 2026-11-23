@@ -1,5 +1,6 @@
 import { calculateStructure, calculateVolumeProfile, DEFAULT_SETTINGS, rangeStatus } from './indicator.js';
-import { fetchCandles } from './market-data.js';
+import { fetchCandles, fetchWatchlistQuotes } from './market-data.js';
+import { drawStructureLine } from './overlays.js';
 import { GROUPS } from './settings.js';
 
 const currencies = { AUD: 'Australian Dollar', CAD: 'Canadian Dollar', CHF: 'Swiss Franc', EUR: 'Euro', GBP: 'British Pound', JPY: 'Japanese Yen', NZD: 'New Zealand Dollar', USD: 'US Dollar', XAU: 'Gold' };
@@ -7,6 +8,7 @@ const symbols = ['EURUSD','GBPUSD','USDJPY','USDCHF','USDCAD','AUDUSD','NZDUSD',
 const intervals = [['1m','1min','1 minute'],['5m','5min','5 minutes'],['15m','15min','15 minutes'],['30m','30min','30 minutes'],['1H','1h','1 hour'],['4H','4h','4 hours'],['1D','1day','1 day']];
 const $ = id => document.getElementById(id);
 let interval = '4h', data = [], structure = null, controller, chart, series, profile = null;
+let watchlistController, watchlistQuotes = {};
 let provider = localStorage.getItem('pivot-data-provider') === 'twelvedata' ? 'twelvedata' : 'biquote';
 let options = { ...DEFAULT_SETTINGS };
 try {
@@ -63,7 +65,7 @@ function initChart() {
     timeScale: { borderVisible: false, timeVisible: true, rightOffset: 20 },
     crosshair: { vertLine: { color: '#d3d7d0', labelBackgroundColor: '#343a35' }, horzLine: { color: '#d3d7d0', labelBackgroundColor: '#343a35' } },
   });
-  series = chart.addCandlestickSeries({ upColor: '#d7b74b', downColor: '#4a4a4a', borderUpColor: '#d7b74b', borderDownColor: '#4a4a4a', wickUpColor: '#9e9a80', wickDownColor: '#777777' });
+  series = chart.addCandlestickSeries({ upColor: '#d7b74b', downColor: '#4a4a4a', borderUpColor: '#000000', borderDownColor: '#000000', wickUpColor: '#9e9a80', wickDownColor: '#777777' });
   new ResizeObserver(() => { chart.applyOptions({ width: $('chart').clientWidth, height: $('chart').clientHeight }); draw(); }).observe($('chart'));
   chart.timeScale().subscribeVisibleLogicalRangeChange(draw);
   $('chart').addEventListener('pointermove', event => { if (event.buttons) requestAnimationFrame(draw); });
@@ -115,8 +117,8 @@ function draw() {
       if (options.vpPoc) line(structure.fib.start, data.length - 1 + options.vpOffset, profile.pocPrice, options.vpPocLineColor, 'POC', options.vpPocLineStyle === 'solid' ? [] : options.vpPocLineStyle === 'dotted' ? [1, 3] : [4, 3], options.vpPocLineWidth);
     }
   }
-  if (options.showBos && structure.bos) line(structure.bos.start, structure.bos.end, structure.bos.price, options.bosColor, 'BOS', [], options.bosWidth);
-  if (options.showLiquidity && structure.liquidity) line(structure.liquidity.start, structure.liquidity.end, structure.liquidity.price, '#434843', 'LQ');
+  if (options.showBos && structure.bos) drawStructureLine(ctx, x(structure.bos.start), x(structure.bos.end), y(structure.bos.price), { label: 'BOS', color: options.bosColor, width: options.bosWidth });
+  if (options.showLiquidity && structure.liquidity) drawStructureLine(ctx, x(structure.liquidity.start), x(structure.liquidity.end), y(structure.liquidity.price), { label: 'LQ', color: '#434843', width: options.bosWidth });
   ctx.font = '9px DM Sans'; ctx.fillStyle = '#60675f';
   for (const label of options.showStructure ? structure.labels : []) {
     const px = x(label.index), py = y(label.price);
@@ -131,6 +133,7 @@ function draw() {
 }
 async function load() {
   symbolText();
+  renderWatchlist();
   if (!chart) return;
   if (controller) controller.abort();
   controller = new AbortController();
@@ -217,12 +220,15 @@ $('close-settings').addEventListener('click', () => $('settings').close());
 $('settings-form').addEventListener('submit', event => {
   event.preventDefault();
   const newKey = $('api-key').value.trim();
+  const sourceChanged = provider !== $('data-provider').value;
   if (newKey && $('data-provider').value === 'twelvedata') localStorage.setItem('pivot-api-key', newKey);
   provider = $('data-provider').value;
   localStorage.setItem('pivot-data-provider', provider);
-  $('api-key').value = ''; $('settings').close(); load();
+  $('api-key').value = ''; $('settings').close();
+  if (sourceChanged || (newKey && provider === 'twelvedata')) resetWatchlist();
+  load();
 });
-$('remove-key').addEventListener('click', () => { localStorage.removeItem('pivot-api-key'); $('api-key').value = ''; $('settings').close(); load(); });
+$('remove-key').addEventListener('click', () => { localStorage.removeItem('pivot-api-key'); $('api-key').value = ''; $('settings').close(); if (provider === 'twelvedata') resetWatchlist(); load(); });
 $('refresh').addEventListener('click', load);
 select.addEventListener('change', load);
 function renderSettings(values = options) {
@@ -263,5 +269,56 @@ $('indicator-form').addEventListener('submit', event => {
   options = next; localStorage.setItem('pivot-indicator-settings', JSON.stringify(options));
   $('indicator-settings').close(); load();
 });
+function renderWatchlist() {
+  const list = $('watchlist'), scroll = list.scrollTop, filter = $('watchlist-filter').value.trim().toUpperCase();
+  list.replaceChildren();
+  for (const symbol of symbols.filter(value => value.includes(filter))) {
+    const row = document.createElement('button'), name = document.createElement('span'), price = document.createElement('span');
+    row.type = 'button'; row.className = 'watchlist-row';
+    row.classList.toggle('active', symbol === select.value);
+    if (symbol === select.value) row.setAttribute('aria-current', 'true');
+    name.textContent = symbol;
+    const quote = watchlistQuotes[symbol];
+    price.textContent = quote ? `${quote.price.toFixed(symbol.endsWith('JPY') || symbol.startsWith('XAU') ? 3 : 5)}${quote.stale ? '*' : ''}` : '—';
+    price.className = 'watchlist-price';
+    row.setAttribute('aria-label', `${symbol}, ${quote ? price.textContent : 'quote unavailable'}`);
+    row.addEventListener('click', () => { select.value = symbol; load(); });
+    row.append(name, price); list.append(row);
+  }
+  if (!list.childElementCount) {
+    const empty = document.createElement('div'); empty.className = 'watchlist-empty'; empty.textContent = 'No matching pairs.'; list.append(empty);
+  }
+  list.scrollTop = scroll;
+}
+async function refreshWatchlist() {
+  if (watchlistController) watchlistController.abort();
+  const request = new AbortController(); watchlistController = request;
+  const source = provider, key = localStorage.getItem('pivot-api-key');
+  watchlistQuotes = {}; renderWatchlist();
+  $('watchlist-refresh').disabled = true;
+  $('watchlist-status').textContent = 'Loading quotes…';
+  try {
+    const result = await fetchWatchlistQuotes(source, symbols, key, request.signal);
+    if (request.signal.aborted) return;
+    watchlistQuotes = result;
+    const count = Object.keys(result).length, stale = Object.values(result).some(quote => quote.stale);
+    $('watchlist-status').textContent = `${source === 'biquote' ? 'biquote' : 'Twelve Data'} snapshot · ${count}/${symbols.length} available${stale ? ' · * last known' : ''}. Refresh for updates.`;
+    renderWatchlist();
+  } catch (error) {
+    if (error.name !== 'AbortError') $('watchlist-status').textContent = `Quotes unavailable: ${error.message}`;
+  } finally {
+    if (watchlistController === request) $('watchlist-refresh').disabled = false;
+  }
+}
+function resetWatchlist() {
+  if (watchlistController) watchlistController.abort();
+  watchlistController = null; $('watchlist-refresh').disabled = false;
+  watchlistQuotes = {}; renderWatchlist();
+  if (provider === 'biquote') refreshWatchlist();
+  else $('watchlist-status').textContent = `Press refresh for Twelve Data quotes; this can use ${symbols.length} API credits.`;
+}
+$('watchlist-filter').addEventListener('input', renderWatchlist);
+$('watchlist-refresh').addEventListener('click', refreshWatchlist);
 symbolText();
+resetWatchlist();
 if (initChart()) load();
