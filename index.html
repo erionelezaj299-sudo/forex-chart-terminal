@@ -32,7 +32,7 @@
         <div class="terminal-toolbar">
           <div class="symbol-wrap"><label class="sr-only" for="symbol">Currency pair</label><select id="symbol"></select><span class="select-chevron">⌄</span></div>
           <div class="toolbar-separator"></div><div id="timeframes" class="timeframes" aria-label="Timeframe"></div>
-          <div class="toolbar-spacer"></div><span class="data-status" id="data-status"><i></i> Not connected</span><button class="refresh-button" id="refresh" title="Refresh data">↻ <span>Refresh</span></button>
+          <div class="toolbar-spacer"></div><span class="data-status" id="data-status"><i></i> Not connected</span><button class="refresh-button" id="indicator-settings-button" title="Indicator settings">⚙ <span>Indicator</span></button><button class="refresh-button" id="refresh" title="Refresh data">↻ <span>Refresh</span></button>
         </div>
         <div class="terminal-body">
           <div class="chart-column">
@@ -48,12 +48,18 @@
             <div class="section-rule"></div>
             <div class="section-head"><div><div class="eyebrow">MARKET STRUCTURE</div><h3>Current chart</h3></div><span class="small-tag">SMC</span></div>
             <div class="stat-row"><span>Latest structure</span><strong id="structure">—</strong></div>
-            <div class="stat-row"><span>Fib 0.71</span><strong id="fib-value">—</strong></div>
+            <div class="stat-row"><span id="fib-label">Fib 0.71</span><strong id="fib-value">—</strong></div>
             <div class="stat-row"><span>4H range</span><strong id="pd-4h">—</strong></div>
             <div class="stat-row"><span>1D range</span><strong id="pd-1d">—</strong></div>
+            <div class="stat-row"><span>Volume profile</span><strong id="vp-status">—</strong></div>
+            <p class="indicator-note" id="data-details"></p>
+            <div class="section-rule"></div>
+            <div class="section-head"><div><div class="eyebrow">OPPORTUNITIES</div><h3>CP scanner</h3></div><button id="scan-button" class="refresh-button">Run scan</button></div>
+            <p class="indicator-note" id="scan-status">On demand · uses 2 requests per symbol</p>
+            <div id="scan-results"></div>
             <div class="section-rule"></div>
             <div class="section-head"><div><div class="eyebrow">INDICATOR</div><h3>Overlay details</h3></div><span class="small-tag gold">BETA</span></div>
-            <p class="indicator-note">Structure, Fibonacci and fair value gaps are approximations of the supplied script. Scanner and volume profile are not available.</p>
+            <p class="indicator-note">Calculations approximate the supplied Pine script and depend on provider history and volume. Results can differ from TradingView.</p>
             <a class="learn-link" href="README.md" target="_blank" rel="noopener">Read limitations <span>↗</span></a>
           </aside>
         </div>
@@ -69,6 +75,14 @@
       <p class="privacy-note">Your key stays in this browser’s local storage and is sent directly to Twelve Data. It is not hidden from anyone with access to this browser. Use a restricted key if available.</p>
       <div class="dialog-actions"><a href="https://twelvedata.com/" target="_blank" rel="noopener">Get an API key ↗</a><button type="submit">Save & connect</button></div>
       <button type="button" class="remove-key" id="remove-key">Remove saved key</button>
+    </form>
+  </dialog>
+  <dialog id="indicator-settings" class="indicator-dialog">
+    <form id="indicator-form">
+      <div class="dialog-top"><div><div class="eyebrow">CURRENCY PROS SMC</div><h2>Indicator settings<span>.</span></h2></div><button type="button" class="close-button" id="close-indicator-settings" aria-label="Close">×</button></div>
+      <p>Changes apply to this browser. Fetching intrabar volume and running the scanner consumes additional API credits.</p>
+      <div id="indicator-fields"></div>
+      <div class="dialog-actions"><button type="button" class="refresh-button" id="reset-indicator">Restore defaults</button><button type="submit">Apply settings</button></div>
     </form>
   </dialog>
 </body>
