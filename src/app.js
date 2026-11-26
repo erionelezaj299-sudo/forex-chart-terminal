@@ -5,7 +5,7 @@ import { drawStructureLine } from './overlays.js';
 import { GROUPS } from './settings.js';
 import { fetchOandaInstruments, streamOandaQuotes } from './oanda.js';
 import { candleEnd, candleCountdown } from './candle-clock.js';
-import { createDrawings } from './drawings.js';
+import { createDrawings } from './drawings.js?v=20261126e';
 
 const currencies = { AUD: 'Australian Dollar', CAD: 'Canadian Dollar', CHF: 'Swiss Franc', EUR: 'Euro', GBP: 'British Pound', JPY: 'Japanese Yen', NZD: 'New Zealand Dollar', USD: 'US Dollar', XAU: 'Gold' };
 const symbols = ['EURUSD','GBPUSD','USDJPY','USDCHF','USDCAD','AUDUSD','NZDUSD','EURAUD','EURCAD','EURCHF','EURGBP','EURJPY','EURNZD','GBPAUD','GBPCAD','GBPCHF','GBPJPY','GBPNZD','AUDCAD','AUDCHF','AUDJPY','AUDNZD','CADCHF','CADJPY','CHFJPY','NZDCAD','NZDCHF','NZDJPY','XAUUSD'];
@@ -33,6 +33,7 @@ try {
   $('data-details').textContent = 'Saved indicator settings could not be read; defaults are in use.';
 }
 const select = $('symbol');
+if (window.matchMedia('(max-width: 720px)').matches) document.querySelector('.analysis-panel').open = false;
 for (const symbol of symbols) select.add(new Option(symbol, symbol));
 for (const [label, value] of intervals) {
   const button = document.createElement('button');
@@ -48,6 +49,20 @@ for (const label of ['HTF Alignment','Liquidity Sweep','BOS + Imbalance','71% Re
   input.addEventListener('change', () => { $('score').textContent = String(document.querySelectorAll('#checklist input:checked').length * 25); });
   row.append(input, document.createTextNode(label));
   const points = document.createElement('span'); points.textContent = '+25'; row.append(points); $('checklist').append(row);
+}
+const drawingTool = $('drawing-tool');
+const drawingButtons = document.querySelectorAll('[data-drawing]');
+function syncDrawingButtons() {
+  drawingButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.drawing === drawingTool.value)));
+}
+drawingTool.addEventListener('change', syncDrawingButtons);
+drawingButtons.forEach(button => button.addEventListener('click', () => {
+  drawingTool.value = button.dataset.drawing;
+  drawingTool.dispatchEvent(new Event('change'));
+}));
+function setPremiumStatus(element, value) {
+  element.textContent = value;
+  element.dataset.state = value.toLowerCase();
 }
 function setStatus(text, state = '') { $('data-status').className = `data-status ${state}`; $('data-status').innerHTML = '<i></i>'; $('data-status').append(document.createTextNode(text)); }
 function message(title, text, button = false) {
@@ -154,7 +169,7 @@ async function load({ background = false } = {}) {
   $('source-name').textContent = source === 'biquote' ? 'BIQUOTE' : source === 'oanda' ? 'OANDA' : 'TWELVE DATA';
   if (!background) {
     series.setData([]); data = []; structure = null; profile = null; htfCandles = [null, null]; latestTick = null; draw();
-    $('last-price').textContent = '—'; $('price-change').textContent = '—'; $('structure').textContent = '—'; $('fib-value').textContent = '—'; $('pd-4h').textContent = '—'; $('pd-1d').textContent = '—'; $('vp-status').textContent = '—'; $('data-details').textContent = '';
+    $('last-price').textContent = '—'; $('price-change').textContent = '—'; $('structure').textContent = '—'; $('fib-value').textContent = '—'; setPremiumStatus($('pd-4h'), '—'); setPremiumStatus($('pd-1d'), '—'); $('vp-status').textContent = '—'; $('data-details').textContent = '';
   }
   updateCandleClock();
   if ((source === 'twelvedata' || source === 'oanda') && !key) { setStatus('Not connected'); message('Your chart is ready', `Connect your ${source === 'oanda' ? 'OANDA account' : 'Twelve Data API key'} to start exploring.`, true); return; }
@@ -169,7 +184,7 @@ async function load({ background = false } = {}) {
     if (!background) {
       chart.applyOptions({ width: $('chart').clientWidth, height: $('chart').clientHeight });
       chart.priceScale('right').applyOptions({ autoScale: true });
-      chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, data.length - 100), to: data.length + 12 });
+      chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, data.length - 70), to: data.length + 22 });
     }
     const last = data[data.length - 1], prev = data[data.length - 2];
     $('last-price').textContent = last.close.toFixed(digits);
@@ -194,15 +209,15 @@ async function load({ background = false } = {}) {
     if (options.use1mPrice && !minute) details.push(`1m price unavailable; using chart close${outcomes[2].reason ? ` (${outcomes[2].reason.message})` : ''}.`);
     outcomes.slice(0, 2).forEach((outcome, i) => {
       const element = $(i === 0 ? 'pd-4h' : 'pd-1d');
-      if (!options.premiumEnabled) { element.textContent = 'Disabled'; return; }
+      if (!options.premiumEnabled) { setPremiumStatus(element, 'Disabled'); return; }
       if (outcome.status === 'fulfilled') {
         htfCandles[i] = outcome.value.map(c => ({ ...c }));
         const range = calculateHigherTimeframeRange(htfCandles[i], i === 0 ? Math.max(2, options.sensitivity4h - 1) : options.sensitivity1d, options.closeThreshold);
-        element.textContent = higherTimeframeStatus(range, price);
+        setPremiumStatus(element, higherTimeframeStatus(range, price));
         element.title = range ? `Midpoint ${range.mid.toFixed(digits)} · ${source} ${i === 0 ? '4H' : '1D'} candles` : 'No confirmed higher-timeframe BOS in available history.';
       } else {
         htfCandles[i] = null;
-        element.textContent = 'Unavailable'; element.title = outcome.reason.message;
+        setPremiumStatus(element, 'Unavailable'); element.title = outcome.reason.message;
         details.push(`${i === 0 ? '4H' : '1D'}: ${outcome.reason.message}`); setStatus('Some data unavailable', 'error');
       }
     });
@@ -305,10 +320,10 @@ function applyOandaQuote(tick) {
   for (let i = 0; i < 2; i++) {
     if (!htfCandles[i] || !options.premiumEnabled) continue;
     const updated = update(htfCandles[i], i === 0 ? '4h' : '1day');
-    if (!updated && tick.time >= candleEnd(htfCandles[i][htfCandles[i].length - 1].time, i === 0 ? '4h' : '1day', 'oanda')) { $(i === 0 ? 'pd-4h' : 'pd-1d').textContent = 'Updating…'; continue; }
+    if (!updated && tick.time >= candleEnd(htfCandles[i][htfCandles[i].length - 1].time, i === 0 ? '4h' : '1day', 'oanda')) { setPremiumStatus($(i === 0 ? 'pd-4h' : 'pd-1d'), 'Updating…'); continue; }
     const range = calculateHigherTimeframeRange(htfCandles[i], i === 0 ? Math.max(2, options.sensitivity4h - 1) : options.sensitivity1d, options.closeThreshold);
     const element = $(i === 0 ? 'pd-4h' : 'pd-1d');
-    element.textContent = higherTimeframeStatus(range, tick.price);
+    setPremiumStatus(element, higherTimeframeStatus(range, tick.price));
     element.title = range ? `Midpoint ${range.mid} · OANDA ${i === 0 ? '4H' : '1D'} candles` : 'No confirmed higher-timeframe BOS in available history.';
   }
   updateOandaStatus();
@@ -338,7 +353,7 @@ function applyTick(tick) {
     if (bar.time === candles[candles.length - 1].time) candles[candles.length - 1] = bar; else candles.push(bar);
     const range = calculateHigherTimeframeRange(candles, i === 0 ? Math.max(2, options.sensitivity4h - 1) : options.sensitivity1d, options.closeThreshold);
     const element = $(i === 0 ? 'pd-4h' : 'pd-1d');
-    element.textContent = higherTimeframeStatus(range, tick.price);
+    setPremiumStatus(element, higherTimeframeStatus(range, tick.price));
     element.title = range ? `Midpoint ${range.mid.toFixed(digits)} · biquote ${i === 0 ? '4H' : '1D'} candles` : 'No confirmed higher-timeframe BOS in available history.';
   }
   updateStreamStatus();

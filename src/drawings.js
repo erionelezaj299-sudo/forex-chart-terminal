@@ -18,7 +18,7 @@ export function createDrawings({ chart, series, canvas, tool, undo, status, getD
   function setContext(source, symbol) {
     const next = `${source}:${symbol}`;
     if (context === next) return;
-    context = next; points = []; hover = null; tool.value = 'cursor'; canvas.classList.remove('active');
+    context = next; points = []; hover = null; tool.value = 'cursor'; tool.dispatchEvent(new Event('change'));
     try {
       const saved = JSON.parse(localStorage.getItem(key()) || '[]');
       if (!Array.isArray(saved)) throw new Error('Invalid saved drawings.');
@@ -96,13 +96,13 @@ export function createDrawings({ chart, series, canvas, tool, undo, status, getD
         return;
       }
       drawings.push({ type: tool.value, points }); points = []; hover = null; save();
-      tool.value = 'cursor'; canvas.classList.remove('active'); say(defaultMessage);
+      tool.value = 'cursor'; tool.dispatchEvent(new Event('change'));
     } else if (['long', 'short'].includes(tool.value)) say(points.length === 1 ? 'Click the stop and right edge of the position.' : 'Click the target price.');
     draw();
   });
   undo.addEventListener('click', () => { if (!drawings.length) { say('No drawing to undo.'); return; } drawings.pop(); save(); draw(); });
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && tool.value !== 'cursor') { tool.value = 'cursor'; points = []; hover = null; canvas.classList.remove('active'); say(defaultMessage); draw(); }
+    if (event.key === 'Escape' && tool.value !== 'cursor') { tool.value = 'cursor'; tool.dispatchEvent(new Event('change')); }
   });
   return { setContext, draw };
 }

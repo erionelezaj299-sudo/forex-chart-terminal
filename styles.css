@@ -11,3 +11,100 @@
 #oanda-environment{width:100%;padding:12px;border:1px solid #e2e7dd;border-radius:7px;background:#fff;margin:8px 0 16px}.connection-error{color:#a73529}.watchlist-row:disabled{opacity:.5;cursor:not-allowed}
 .drawing-toolbar{display:flex;align-items:center;gap:8px;padding:10px 24px 0;flex-wrap:wrap;font-size:10px;color:#69736a}.drawing-toolbar select,.drawing-toolbar button{border:1px solid #e4e9df;border-radius:6px;background:#fff;color:#3b443b;padding:6px;font-size:10px}.drawing-toolbar span{color:#8a9488}#drawings{position:absolute;inset:0;width:100%;height:100%;z-index:6;pointer-events:none;touch-action:none}#drawings.active{pointer-events:auto;cursor:crosshair}.chart-message{z-index:7}
 .chart-shell{height:max(600px,calc(100vh - 240px))}.terminal:fullscreen .terminal-body,.terminal.expanded .terminal-body{grid-template-columns:minmax(0,1fr)}.terminal:fullscreen .insights,.terminal.expanded .insights{display:none}@media(max-width:720px){.chart-shell{height:65vh;min-height:420px}.terminal:fullscreen .terminal-body,.terminal.expanded .terminal-body{overflow:hidden}.terminal:fullscreen .chart-column,.terminal.expanded .chart-column{flex:1;min-height:0}}
+
+/* Chart-first workspace */
+:root{font-family:Arial,sans-serif;background:#fff;color:#252a34}
+.layout{display:block;min-height:100vh}
+.workspace{width:100%;max-width:none;margin:0;padding:0}
+.terminal{height:100vh;display:flex;flex-direction:column;border:0;border-radius:0;box-shadow:none}
+.terminal-toolbar{height:52px;min-height:52px;gap:8px;padding:0 12px;border-bottom:1px solid #e3e5e9}
+.brand{font:700 24px Arial,sans-serif;color:#c5a939;text-decoration:none;padding:0 4px}
+.symbol-wrap select{min-width:122px;background:#f2f3f5;border:0;border-radius:18px;font-size:13px;color:#1f242d}
+.timeframes{gap:0}
+.timeframes button{color:#30343b;font-size:13px;font-weight:500;padding:8px}
+.timeframes button.active{background:#e8e9eb;color:#17191d}
+.toolbar-separator{background:#e3e5e9;margin:0 4px}
+.refresh-button{border:0;border-radius:5px;color:#30343b;background:transparent;font-size:13px;white-space:nowrap}
+.refresh-button:hover,.drawing-rail button:hover{background:#f0f2f5}
+.data-status{font-size:10px;font-weight:500;color:#68717c}
+.terminal-body{flex:1;min-height:0;grid-template-columns:52px minmax(0,1fr) 260px}
+.drawing-rail{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-right:1px solid #e3e5e9;overflow-y:auto}
+.drawing-rail button{width:40px;height:40px;flex-shrink:0;border:0;border-radius:5px;background:transparent;color:#272c35;font-size:21px}
+.drawing-rail button[aria-pressed=true]{background:#e9ebee}
+.drawing-rail button[data-drawing=long],.drawing-rail button[data-drawing=short]{font-size:15px;font-weight:700}
+.chart-column{display:flex;flex-direction:column;min-width:0;min-height:0}
+.chart-heading{flex-shrink:0;min-height:50px;padding:8px 16px;align-items:center;gap:12px}
+.instrument-heading{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:13px}
+.instrument-heading strong{font-size:15px;color:#171b22}
+.pair-tag{font-size:9px;margin:0;background:#f1f2f4;color:#68717c}
+#pair-description{font-size:12px;color:#69717d}
+.chart-price{display:flex;align-items:baseline;gap:9px;white-space:nowrap}
+.chart-price strong{font:700 15px Arial,sans-serif;letter-spacing:0}
+.chart-price span{font-size:10px;color:#747c88;margin:0}
+.chart-shell{flex:1;min-height:0;height:auto;margin:0;overflow:hidden}
+.analysis-panel{position:absolute;z-index:8;top:8px;right:75px;width:235px;background:#ffffffed;color:#2c3442;font-size:12px;padding:5px}
+.analysis-title{font-size:13px;white-space:nowrap;margin-bottom:8px;cursor:pointer;list-style:none}
+.analysis-title::-webkit-details-marker{display:none}
+.analysis-panel:not([open]) .analysis-title{margin:0}
+.chart-message{z-index:9}
+.pd-summary{display:grid;grid-template-columns:1fr;gap:2px;margin:0}
+.pd-summary div{display:grid;grid-template-columns:34px 1fr;gap:4px;padding:0;border:0;background:none}
+.pd-summary span{font-size:12px;color:#313a49}
+.pd-summary strong{padding:5px;text-align:center;background:#eef0f3;color:#4e5867;font-size:12px}
+.pd-summary strong[data-state=premium]{background:#f64e58;color:white}
+.pd-summary strong[data-state=discount]{background:#4caf50;color:white}
+.checklist-title{text-align:center;margin:10px 0 4px;font-size:13px}
+.checklist-title small{font-size:8px;color:#89919a}
+.checklist{gap:0}
+.checklist label{padding:5px 2px;color:#313a49;font-size:12px;font-weight:500}
+.checklist input{accent-color:#536f9e}
+.checklist label span{font-size:10px}
+.trade-score{display:flex;align-items:center;gap:20px;padding:8px 3px;font-size:12px}
+.trade-score strong{min-width:15px}
+.chart-footer{flex-shrink:0;min-height:28px;padding:7px 12px;font-size:10px;font-weight:400;letter-spacing:0;border-top:1px solid #e5e7eb;color:#7a838e}
+.insights{display:flex;flex-direction:column;min-height:0;overflow:hidden;border-left:1px solid #e3e5e9;border-top:0;padding:0}
+.section-head{padding:12px 14px;border-bottom:1px solid #eaecf0}
+.section-head h2{font-size:14px}
+.watchlist-refresh{background:transparent;color:#3f4651}
+.watchlist-filter{width:calc(100% - 24px);margin:10px 12px 0;border-radius:4px;background:#f7f8fa;font-size:12px}
+.watchlist-status{margin:8px 12px;font-size:10px;color:#707986}
+.watchlist-columns{display:flex;justify-content:space-between;padding:7px 12px;border-bottom:1px solid #e9ebef;color:#858b95;font-size:11px}
+.watchlist{flex:1;min-height:0;max-height:none;overflow-y:auto;border:0;border-radius:0}
+.watchlist-row{padding:10px 12px;font-size:12px;font-weight:600;color:#232831;border-bottom:1px solid #f0f1f3}
+.watchlist-row.active{background:#dceafd;color:#222}
+.watchlist-row:hover{background:#eef3fa}
+.watchlist-price{color:#313945}
+.market-details{flex-shrink:0;max-height:30%;overflow:auto;border-top:1px solid #e5e7eb;padding:10px 12px;font-size:11px}
+.market-details summary{cursor:pointer;font-weight:700}
+.market-details .stat-row{padding-top:8px}
+.market-details .indicator-note{color:#69717d}
+.terminal:fullscreen .terminal-body,.terminal.expanded .terminal-body{grid-template-columns:52px minmax(0,1fr)}
+.terminal:fullscreen .chart-shell,.terminal.expanded .chart-shell{min-height:0}
+@media(max-width:720px){
+  .terminal{height:auto;min-height:100vh}
+  .terminal-toolbar{gap:4px;padding:0 7px}
+  .terminal-toolbar .refresh-button span{display:none}
+  .terminal-toolbar #settings-button,.terminal-toolbar #fullscreen{position:sticky;z-index:2;flex-shrink:0;background:#fff}
+  .terminal-toolbar #settings-button{right:40px}
+  .terminal-toolbar #fullscreen{right:0}
+  .terminal-body{display:grid;grid-template-columns:44px minmax(0,1fr);grid-template-rows:minmax(420px,70vh) auto}
+  .drawing-rail{grid-row:1;padding:5px 2px}
+  .drawing-rail button{width:36px;height:36px}
+  .chart-column{grid-column:2;grid-row:1}
+  .chart-heading{padding:6px 8px;align-items:flex-start}
+  .instrument-heading{gap:4px}
+  #pair-description{font-size:10px}
+  .chart-price{display:block;text-align:right}
+  .chart-price span{font-size:9px}
+  #price-change{display:none}
+  .chart-shell{height:auto;min-height:0}
+  .analysis-panel{right:52px;width:165px;font-size:10px}
+  .analysis-title,.checklist-title{font-size:10px}
+  .pd-summary span,.pd-summary strong,.checklist label,.trade-score{font-size:10px}
+  .checklist label{padding:3px 1px}
+  .checklist label span{display:none}
+  .insights{grid-column:1/-1;grid-row:2;max-height:420px;border-left:0;border-top:1px solid #e3e5e9}
+  .watchlist{min-height:180px}
+  .terminal:fullscreen .terminal-body,.terminal.expanded .terminal-body{display:grid;grid-template-columns:44px minmax(0,1fr);grid-template-rows:minmax(0,1fr);overflow:hidden}
+  .terminal:fullscreen .chart-column,.terminal.expanded .chart-column{min-height:0}
+}
