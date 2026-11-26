@@ -387,6 +387,21 @@ function stopStream() {
   if (previous) previous.stop().catch(error => console.error('Unable to disconnect the live feed:', error));
 }
 const terminal = document.querySelector('.terminal');
+function setChartMode(mode) {
+  const tradingview = mode === 'tradingview';
+  $('tradingview-view').hidden = !tradingview;
+  $('analysis-toolbar').hidden = tradingview;
+  $('analysis-view').hidden = tradingview;
+  document.querySelector('.heading-meta').hidden = tradingview;
+  $('chart-mode-note').textContent = tradingview
+    ? 'TradingView data and drawings; custom indicator is available in the other chart.'
+    : 'Custom indicator uses the selected data provider, not the TradingView chart.';
+  localStorage.setItem('pivot-chart-mode', mode);
+  if (!tradingview) requestAnimationFrame(draw);
+}
+$('chart-mode').value = localStorage.getItem('pivot-chart-mode') === 'analysis' ? 'analysis' : 'tradingview';
+$('chart-mode').addEventListener('change', event => setChartMode(event.target.value));
+setChartMode($('chart-mode').value);
 function syncFullscreenButton() {
   if (!$('fullscreen')) return;
   const active = document.fullscreenElement === terminal || terminal.classList.contains('expanded');
