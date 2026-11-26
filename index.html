@@ -8,10 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261126a">
+  <link rel="stylesheet" href="styles.css?v=20261126c">
   <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js" defer></script>
-  <script type="module" src="./src/app.js?v=20261126a"></script>
+  <script type="module" src="./src/app.js?v=20261126c"></script>
 </head>
 <body>
   <header class="topbar">
@@ -30,22 +30,12 @@
     <section class="workspace">
       <div class="page-heading"><div><div class="eyebrow">YOUR TRADING WORKSPACE <span>✦</span></div><h1>Market overview<span>.</span></h1><p>A clearer view of the markets, all in one place.</p></div><div class="heading-meta"><span class="live-dot"></span> DATA BY <span id="source-name">BIQUOTE</span></div></div>
       <div class="terminal">
-        <div class="chart-mode-toolbar">
-          <label for="chart-mode">Chart</label>
-          <select id="chart-mode"><option value="tradingview">TradingView · ICE</option><option value="analysis">Custom indicator chart</option></select>
-          <span id="chart-mode-note">TradingView data and drawings; custom indicator is available in the other chart.</span>
-          <button class="refresh-button" id="fullscreen" type="button" aria-label="Enter fullscreen chart" title="Fullscreen chart">⛶ <span>Fullscreen</span></button>
-        </div>
-        <div id="tradingview-view" class="tradingview-view">
-          <iframe id="tradingview-frame" src="tradingview-chart.html?v=20261126b" title="TradingView ICE market chart" allowfullscreen></iframe>
-          <p>Open the watchlist with the button on the chart's right edge. TradingView controls its data and chart style; the indicator approximation, checklist and custom colors are available in the custom indicator chart.</p>
-        </div>
-        <div class="terminal-toolbar" id="analysis-toolbar" hidden>
+        <div class="terminal-toolbar">
           <div class="symbol-wrap"><label class="sr-only" for="symbol">Currency pair</label><select id="symbol"></select><span class="select-chevron">⌄</span></div>
           <div class="toolbar-separator"></div><div id="timeframes" class="timeframes" aria-label="Timeframe"></div>
-          <div class="toolbar-spacer"></div><span class="data-status" id="data-status"><i></i> Not connected</span><button class="refresh-button" id="indicator-settings-button" title="Indicator settings">⚙ <span>Indicator</span></button><button class="refresh-button" id="refresh" title="Refresh data">↻ <span>Refresh</span></button>
+          <div class="toolbar-spacer"></div><span class="data-status" id="data-status"><i></i> Not connected</span><button class="refresh-button" id="indicator-settings-button" title="Indicator settings">⚙ <span>Indicator</span></button><button class="refresh-button" id="refresh" title="Refresh data">↻ <span>Refresh</span></button><button class="refresh-button" id="fullscreen" type="button" aria-label="Enter fullscreen chart" title="Fullscreen chart">⛶ <span>Fullscreen</span></button>
         </div>
-        <div class="terminal-body" id="analysis-view" hidden>
+        <div class="terminal-body">
           <div class="chart-column">
             <div class="chart-heading"><div><div class="chart-title"><span id="pair-title">EURUSD</span> <span class="pair-tag">FOREX</span></div><div class="chart-subtitle" id="pair-description">Euro / US Dollar · 4 hours</div></div><div class="chart-price"><strong id="last-price">—</strong><span id="candle-clock">Candle close unavailable</span><span id="price-change">Connect data to begin</span></div></div>
             <div class="drawing-toolbar"><label for="drawing-tool">Draw</label><select id="drawing-tool"><option value="cursor">Cursor</option><option value="trend">Trend line</option><option value="horizontal">Horizontal line</option><option value="vertical">Vertical line</option><option value="rectangle">Rectangle</option><option value="fib">Fib retracement</option><option value="long">Long position</option><option value="short">Short position</option></select><button id="undo-drawing" type="button">Undo drawing</button><span id="drawing-status" aria-live="polite">Drawings are for analysis only; no orders are placed.</span></div>

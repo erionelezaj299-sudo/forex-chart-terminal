@@ -38,6 +38,28 @@ test('biquote requests use its interval and never send a Twelve Data key', async
   } finally { globalThis.fetch = original; }
 });
 
+test('biquote 4H requests use hourly data and New York session boundaries', async () => {
+  const originalFetch = globalThis.fetch, originalNow = Date.now;
+  let url;
+  Date.now = () => Date.parse('2026-11-26T18:30:00Z');
+  globalThis.fetch = async value => {
+    url = new URL(value);
+    return { ok: true, json: async () => ({ symbol: 'EURUSD', interval: '1h', bars: [
+      { openTime: '2026-11-26T18:00:00Z', open: 1.1, high: 1.2, low: 1.0, close: 1.15, tickVolume: 20 },
+      { openTime: '2026-11-26T17:00:00Z', open: 1.1, high: 1.2, low: 1.0, close: 1.15, tickVolume: 20 },
+      { openTime: '2026-11-26T16:00:00Z', open: 1.1, high: 1.2, low: 1.0, close: 1.15, tickVolume: 20 },
+      { openTime: '2026-11-26T15:00:00Z', open: 1.1, high: 1.2, low: 1.0, close: 1.15, tickVolume: 20 },
+      { openTime: '2026-11-26T14:00:00Z', open: 1.1, high: 1.2, low: 1.0, close: 1.15, tickVolume: 20 },
+    ] }) };
+  };
+  try {
+    const data = await fetchCandles('biquote', 'EURUSD', '4h', '', undefined);
+    assert.equal(url.searchParams.get('interval'), '1h');
+    assert.deepEqual(data.map(c => c.time), [Date.parse('2026-11-26T14:00:00Z') / 1000, Date.parse('2026-11-26T18:00:00Z') / 1000]);
+    assert.deepEqual(data.map(c => c.volume), [80, 20]);
+  } finally { globalThis.fetch = originalFetch; Date.now = originalNow; }
+});
+
 test('watchlist returns provider prices and marks stale biquote quotes', async () => {
   const original = globalThis.fetch;
   globalThis.fetch = async () => ({ ok: true, json: async () => ({
