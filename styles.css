@@ -80,7 +80,18 @@
 .market-details .indicator-note{color:#69717d}
 .terminal:fullscreen .terminal-body,.terminal.expanded .terminal-body{grid-template-columns:52px minmax(0,1fr)}
 .terminal:fullscreen .chart-shell,.terminal.expanded .chart-shell{min-height:0}
+.replay-controls{display:flex;align-items:center;gap:8px;flex-shrink:0;padding:6px 12px;border-bottom:1px solid #e3e5e9;font-size:11px;background:#f7f8fa;overflow-x:auto}
+.replay-controls[hidden]{display:none}
+.replay-controls button,.replay-controls select{flex-shrink:0;border:1px solid #dfe3e9;border-radius:4px;background:#fff;color:#2d3542;padding:5px 8px}
+.replay-controls button:disabled{opacity:.4}
+.replay-controls input{min-width:80px;flex:1;accent-color:#bca447}
+#replay-time{white-space:nowrap;font-variant-numeric:tabular-nums}
+.terminal.replaying .watchlist-price{visibility:hidden}
 @media(max-width:720px){
+  .replay-controls{gap:4px;padding:6px}
+  .replay-controls button,.replay-controls select{padding:5px}
+  .replay-controls input{min-width:50px}
+  #replay-time{font-size:10px}
   .terminal{height:auto;min-height:100vh}
   .terminal-toolbar{gap:4px;padding:0 7px}
   .terminal-toolbar .refresh-button span{display:none}

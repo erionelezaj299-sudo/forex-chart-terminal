@@ -8,10 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261126e">
+  <link rel="stylesheet" href="styles.css?v=20261126f">
   <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js" defer></script>
-  <script type="module" src="./src/app.js?v=20261126e"></script>
+  <script type="module" src="./src/app.js?v=20261126f"></script>
 </head>
 <body>
   <main class="layout">
@@ -21,7 +21,7 @@
           <a class="brand" href="." aria-label="Pivot home">◈</a>
           <div class="symbol-wrap"><label class="sr-only" for="symbol">Currency pair</label><select id="symbol"></select><span class="select-chevron">⌄</span></div>
           <div class="toolbar-separator"></div><div id="timeframes" class="timeframes" aria-label="Timeframe"></div>
-          <div class="toolbar-separator"></div><button class="refresh-button" id="indicator-settings-button" title="Indicator settings">⌁ <span>Indicator</span></button>
+          <div class="toolbar-separator"></div><button class="refresh-button" id="indicator-settings-button" title="Indicator settings">⌁ <span>Indicator</span></button><button class="refresh-button" id="replay-toggle" type="button" disabled title="Bar replay" aria-label="Toggle bar replay" aria-pressed="false">⏮ <span>Replay</span></button>
           <div class="toolbar-spacer"></div><span class="data-status" id="data-status"><i></i> Not connected</span><button class="refresh-button" id="refresh" title="Refresh data">↻ <span>Refresh</span></button><button class="refresh-button" id="settings-button" title="Data settings" aria-label="Data settings">⚙ <span>Data</span></button><button class="refresh-button" id="fullscreen" type="button" aria-label="Enter fullscreen chart" title="Fullscreen chart">⛶ <span>Fullscreen</span></button>
         </div>
         <div class="terminal-body">
@@ -38,6 +38,15 @@
             <button id="undo-drawing" type="button" title="Undo drawing" aria-label="Undo drawing">↶</button>
           </div>
           <div class="chart-column">
+            <div class="replay-controls" id="replay-controls" hidden>
+              <button id="replay-prev" type="button" title="Previous bar" aria-label="Previous bar">◀</button>
+              <button id="replay-play" type="button" aria-label="Play replay">▶ Play</button>
+              <button id="replay-next" type="button" title="Next bar" aria-label="Next bar">▶|</button>
+              <label class="sr-only" for="replay-position">Replay position</label><input id="replay-position" type="range" min="0" max="0" value="0">
+              <span id="replay-time" aria-live="polite"></span>
+              <label for="replay-speed">Speed</label><select id="replay-speed"><option value="1500">1×</option><option value="750">2×</option><option value="300">5×</option></select>
+              <button id="replay-exit" type="button">Exit replay</button>
+            </div>
             <div class="chart-heading"><div class="instrument-heading"><strong id="pair-title">EURUSD</strong><span class="pair-tag">FOREX</span><span id="pair-description">Euro / US Dollar · 4 hours</span></div><div class="chart-price"><strong id="last-price">—</strong><span id="candle-clock">Candle close unavailable</span><span id="price-change">Connect data to begin</span></div></div>
             <div class="chart-shell">
               <div id="chart"></div><canvas id="overlays" aria-hidden="true"></canvas><canvas id="drawings" aria-label="Drawing area"></canvas>

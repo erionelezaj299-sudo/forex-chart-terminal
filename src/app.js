@@ -5,7 +5,8 @@ import { drawStructureLine } from './overlays.js';
 import { GROUPS } from './settings.js';
 import { fetchOandaInstruments, streamOandaQuotes } from './oanda.js';
 import { candleEnd, candleCountdown } from './candle-clock.js';
-import { createDrawings } from './drawings.js?v=20261126e';
+import { createDrawings } from './drawings.js?v=20261126f';
+import { replayableCandles, replaySnapshot } from './replay.js?v=20261126f';
 
 const currencies = { AUD: 'Australian Dollar', CAD: 'Canadian Dollar', CHF: 'Swiss Franc', EUR: 'Euro', GBP: 'British Pound', JPY: 'Japanese Yen', NZD: 'New Zealand Dollar', USD: 'US Dollar', XAU: 'Gold' };
 const symbols = ['EURUSD','GBPUSD','USDJPY','USDCHF','USDCAD','AUDUSD','NZDUSD','EURAUD','EURCAD','EURCHF','EURGBP','EURJPY','EURNZD','GBPAUD','GBPCAD','GBPCHF','GBPJPY','GBPNZD','AUDCAD','AUDCHF','AUDJPY','AUDNZD','CADCHF','CADJPY','CHFJPY','NZDCAD','NZDCHF','NZDJPY','XAUUSD'];
@@ -14,6 +15,7 @@ const $ = id => document.getElementById(id);
 let interval = '4h', data = [], structure = null, controller, chart, series, profile = null, drawings;
 let watchlistController, watchlistQuotes = {};
 let htfCandles = [null, null], latestTick = null, stream, streamState = 'connecting', refreshRunning = false;
+let minuteCandles = null, replay = null, replayTimer = null;
 let oandaConfig = null, oandaSymbols = new Set(), quotePollRunning = false, oandaValidation, oandaStream, oandaStreamState = 'disconnected', lastCandleRollover = 0;
 const intervalSeconds = { '1min': 60, '5min': 300, '15min': 900, '30min': 1800, '1h': 3600, '4h': 14400, '1day': 86400 };
 let provider = ['twelvedata', 'oanda'].includes(localStorage.getItem('pivot-data-provider')) ? localStorage.getItem('pivot-data-provider') : 'biquote';
@@ -89,7 +91,7 @@ function initChart() {
   });
   series = chart.addCandlestickSeries({ upColor: '#d7b74b', downColor: '#4a4a4a', borderUpColor: '#000000', borderDownColor: '#000000', wickUpColor: '#9e9a80', wickDownColor: '#777777' });
   if ($('drawings') && $('drawing-tool') && $('undo-drawing') && $('drawing-status')) {
-    drawings = createDrawings({ chart, series, canvas: $('drawings'), tool: $('drawing-tool'), undo: $('undo-drawing'), status: $('drawing-status'), getData: () => data, getInterval: () => interval });
+    drawings = createDrawings({ chart, series, canvas: $('drawings'), tool: $('drawing-tool'), undo: $('undo-drawing'), status: $('drawing-status'), getData: () => data, getInterval: () => interval, getReplayTime: () => replay ? data[data.length - 1]?.time : null });
     drawings.setContext(provider, select.value);
   }
   new ResizeObserver(() => { chart.applyOptions({ width: $('chart').clientWidth, height: $('chart').clientHeight }); draw(); }).observe($('chart'));
@@ -159,6 +161,9 @@ function draw() {
   }
 }
 async function load({ background = false } = {}) {
+  if (background && replay) return;
+  if (!background && replay) closeReplay();
+  $('replay-toggle').disabled = true;
   symbolText();
   renderWatchlist();
   drawings?.setContext(provider, select.value);
@@ -168,7 +173,7 @@ async function load({ background = false } = {}) {
   const signal = controller.signal, symbol = select.value, key = provider === 'oanda' ? oandaConfig : localStorage.getItem('pivot-api-key'), source = provider;
   $('source-name').textContent = source === 'biquote' ? 'BIQUOTE' : source === 'oanda' ? 'OANDA' : 'TWELVE DATA';
   if (!background) {
-    series.setData([]); data = []; structure = null; profile = null; htfCandles = [null, null]; latestTick = null; draw();
+    series.setData([]); data = []; structure = null; profile = null; htfCandles = [null, null]; minuteCandles = null; latestTick = null; draw();
     $('last-price').textContent = '—'; $('price-change').textContent = '—'; $('structure').textContent = '—'; $('fib-value').textContent = '—'; setPremiumStatus($('pd-4h'), '—'); setPremiumStatus($('pd-1d'), '—'); $('vp-status').textContent = '—'; $('data-details').textContent = '';
   }
   updateCandleClock();
@@ -203,6 +208,7 @@ async function load({ background = false } = {}) {
     ]);
     if (signal.aborted) return;
     const minute = outcomes[2].status === 'fulfilled' ? outcomes[2].value : null;
+    minuteCandles = minute;
     const price = source !== 'twelvedata' && latestTick ? latestTick.price : options.use1mPrice && minute?.length ? minute[minute.length - 1].close : last.close;
     const details = [];
     if (source === 'biquote') details.push('biquote prices and 4H candle timing differ from TradingView ICE.');
@@ -237,13 +243,107 @@ async function load({ background = false } = {}) {
     $('data-details').textContent = details.join(' ');
     if (source === 'biquote' && latestTick) applyTick(latestTick);
     if (source === 'oanda' && latestTick) applyOandaQuote(latestTick);
+    $('replay-toggle').disabled = replayableCandles(data, interval, provider).length < 2;
     draw();
   } catch (error) {
     if (error.name === 'AbortError') return;
     if (background) { setStatus('Candle refresh failed', 'error'); $('data-details').textContent = `Candle refresh failed: ${error.message}`; }
     else { setStatus('Data unavailable', 'error'); message('Unable to load market data', error.message, true); }
+  } finally {
+    if (!signal.aborted && !replay) $('replay-toggle').disabled = replayableCandles(data, interval, provider).length < 2;
   }
 }
+function pauseReplay() {
+  if (replayTimer !== null) clearInterval(replayTimer);
+  replayTimer = null;
+  $('replay-play').textContent = '▶ Play';
+  $('replay-play').setAttribute('aria-label', 'Play replay');
+}
+function closeReplay() {
+  pauseReplay();
+  replay = null;
+  $('replay-controls').hidden = true;
+  document.querySelector('.terminal').classList.remove('replaying');
+  $('replay-toggle').setAttribute('aria-pressed', 'false');
+}
+function renderReplay() {
+  const index = Number($('replay-position').value);
+  const snapshot = replaySnapshot(replay.candles, index, replay.higher, replay.minute, interval, provider);
+  data = snapshot.visible;
+  structure = calculateStructure(data, options);
+  series.setData(data);
+  const last = data[data.length - 1], prev = data[data.length - 2];
+  const digits = select.value.endsWith('JPY') || select.value.startsWith('XAU') ? 3 : 5;
+  $('last-price').textContent = last.close.toFixed(digits);
+  $('price-change').textContent = prev ? `${last.close >= prev.close ? '+' : ''}${((last.close / prev.close - 1) * 100).toFixed(2)}% vs previous candle` : 'First available candle';
+  $('structure').textContent = structure.bos ? `${structure.bos.direction === 'bull' ? 'Bullish' : 'Bearish'} BOS` : 'Not found';
+  $('fib-value').textContent = structure.fib ? structure.fib.level.toFixed(digits) : 'Unavailable';
+  $('replay-time').textContent = `${new Date(last.time * 1000).toISOString().replace('T', ' ').slice(0, 16)} UTC`;
+  $('replay-prev').disabled = index === 0;
+  $('replay-next').disabled = index === replay.candles.length - 1;
+  $('replay-play').disabled = index === replay.candles.length - 1;
+  for (let i = 0; i < 2; i++) {
+    const element = $(i === 0 ? 'pd-4h' : 'pd-1d'), bars = snapshot.higher[i];
+    if (!options.premiumEnabled) setPremiumStatus(element, 'Disabled');
+    else {
+      const range = bars?.length ? calculateHigherTimeframeRange(bars, i === 0 ? Math.max(2, options.sensitivity4h - 1) : options.sensitivity1d, options.closeThreshold) : null;
+      setPremiumStatus(element, higherTimeframeStatus(range, last.close));
+    }
+    element.title = 'Replay uses completed higher-timeframe candles only.';
+  }
+  profile = null;
+  const details = ['Historical replay uses the selected provider, not TradingView ICE. Higher-timeframe values use completed candles only.'];
+  if (options.showVp && structure.fib) {
+    const end = options.vpEndAtExtreme ? structure.fib.extremeIndex : data.length - 1;
+    const leg = data.slice(structure.fib.start, end + 1);
+    const selected = options.vpUseLtf && interval !== '1min' && snapshot.minute
+      ? profileCandles(leg, snapshot.minute, intervalSeconds[interval], snapshot.cutoff - 1)
+      : { candles: leg, fallback: options.vpUseLtf && interval !== '1min' ? leg.length : 0 };
+    profile = calculateVolumeProfile(selected.candles, structure.fib, options);
+    $('vp-status').textContent = profile.error ? 'Unavailable' : selected.fallback || provider !== 'twelvedata' ? 'Approximate' : 'Available';
+    if (profile.error) details.push(`Volume profile: ${profile.error}`);
+    else if (selected.fallback) details.push(`Incomplete 1m history for ${selected.fallback} chart bar(s); chart-bar volume is used.`);
+    if (provider !== 'twelvedata') details.push('Profile uses provider price-update counts, not exchange-wide volume.');
+  } else $('vp-status').textContent = options.showVp ? 'No active leg' : 'Disabled';
+  $('data-details').textContent = details.join(' ');
+  setStatus('Replay · historical bars');
+  updateCandleClock();
+  chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, data.length - 70), to: data.length + 22 });
+  requestAnimationFrame(() => requestAnimationFrame(draw));
+}
+function startReplay() {
+  const candles = replayableCandles(data, interval, provider);
+  if (candles.length < 2) return;
+  if (controller) controller.abort();
+  replay = { candles, higher: htfCandles.map(bars => bars?.map(bar => ({ ...bar })) ?? null), minute: minuteCandles?.map(bar => ({ ...bar })) ?? null };
+  $('replay-position').max = String(candles.length - 1);
+  $('replay-position').value = String(Math.max(0, candles.length - 61));
+  $('replay-controls').hidden = false;
+  document.querySelector('.terminal').classList.add('replaying');
+  $('replay-toggle').setAttribute('aria-pressed', 'true');
+  document.querySelectorAll('.watchlist-row').forEach(row => setWatchlistPrice(row, row.dataset.symbol));
+  renderReplay();
+}
+function stepReplay(amount) {
+  const input = $('replay-position');
+  input.value = String(Math.max(0, Math.min(Number(input.max), Number(input.value) + amount)));
+  renderReplay();
+  if (Number(input.value) === Number(input.max)) pauseReplay();
+}
+function playReplay() {
+  if (replayTimer !== null) { pauseReplay(); return; }
+  if (Number($('replay-position').value) >= Number($('replay-position').max)) return;
+  $('replay-play').textContent = 'Ⅱ Pause';
+  $('replay-play').setAttribute('aria-label', 'Pause replay');
+  replayTimer = setInterval(() => stepReplay(1), Number($('replay-speed').value));
+}
+$('replay-toggle').addEventListener('click', () => { if (replay) { closeReplay(); load(); } else startReplay(); });
+$('replay-exit').addEventListener('click', () => { closeReplay(); load(); });
+$('replay-prev').addEventListener('click', () => { pauseReplay(); stepReplay(-1); });
+$('replay-next').addEventListener('click', () => { pauseReplay(); stepReplay(1); });
+$('replay-play').addEventListener('click', playReplay);
+$('replay-position').addEventListener('input', () => { pauseReplay(); renderReplay(); });
+$('replay-speed').addEventListener('change', () => { if (replayTimer !== null) { pauseReplay(); playReplay(); } });
 function updateProviderFields() {
   const wantsKey = $('data-provider').value === 'twelvedata';
   const wantsOanda = $('data-provider').value === 'oanda';
@@ -261,10 +361,11 @@ function updateProviderFields() {
 }
 function updateCandleClock() {
   if (!$('candle-clock')) return;
+  if (replay) { $('candle-clock').textContent = 'Historical replay'; return; }
   $('candle-clock').textContent = data.length ? candleCountdown(data[data.length - 1].time, interval, provider) : 'Candle close unavailable';
 }
 function updateOandaStatus() {
-  if (provider !== 'oanda') return;
+  if (provider !== 'oanda' || replay) return;
   const quote = watchlistQuotes[select.value];
   if (!oandaConfig) setStatus('OANDA not connected');
   else if (!quote) setStatus('Awaiting OANDA quote');
@@ -300,7 +401,7 @@ function startOandaStream() {
   });
 }
 function applyOandaQuote(tick) {
-  if (provider !== 'oanda' || tick.symbol !== select.value || Date.now() / 1000 - tick.time > 30) return;
+  if (replay || provider !== 'oanda' || tick.symbol !== select.value || Date.now() / 1000 - tick.time > 30) return;
   const update = (candles, timeframe) => {
     const last = candles?.[candles.length - 1];
     if (!last || tick.time < last.time || tick.time >= candleEnd(last.time, timeframe, 'oanda')) return null;
@@ -329,13 +430,13 @@ function applyOandaQuote(tick) {
   updateOandaStatus();
 }
 function updateStreamStatus() {
-  if (provider !== 'biquote') return;
+  if (provider !== 'biquote' || replay) return;
   if (streamState === 'connected' && latestTick && Date.now() / 1000 - latestTick.time <= 30) setStatus('Live · biquote', 'connected');
   else if (streamState === 'connected') setStatus('Stream connected · awaiting fresh quote');
   else setStatus(streamState === 'connecting' ? 'Connecting live feed' : 'Live feed unavailable', streamState === 'connecting' ? '' : 'error');
 }
 function applyTick(tick) {
-  if (provider !== 'biquote' || tick.symbol !== select.value || Date.now() / 1000 - tick.time > 30) return;
+  if (replay || provider !== 'biquote' || tick.symbol !== select.value || Date.now() / 1000 - tick.time > 30) return;
   const updated = updateCurrentCandle(data, tick, intervalSeconds[interval]);
   if (!updated) return;
   if (updated.time === data[data.length - 1].time) data[data.length - 1] = updated;
@@ -511,6 +612,7 @@ $('indicator-form').addEventListener('submit', event => {
 });
 function setWatchlistPrice(row, symbol) {
   const quote = watchlistQuotes[symbol], price = row.querySelector('.watchlist-price');
+  if (replay) { price.textContent = '—'; row.setAttribute('aria-label', `${symbol}, live quote hidden during replay`); return; }
   const stale = quote && (quote.stale || (quote.time && Date.now() / 1000 - quote.time > 300));
   price.textContent = quote ? `${quote.price.toFixed(symbol.endsWith('JPY') || symbol.startsWith('XAU') ? 3 : 5)}${stale ? '*' : ''}` : '—';
   row.setAttribute('aria-label', `${symbol}, ${quote ? price.textContent : 'quote unavailable'}`);

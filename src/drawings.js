@@ -6,7 +6,7 @@ export function validPosition(type, points) {
   return type === 'long' ? stop < entry && target > entry : stop > entry && target < entry;
 }
 
-export function createDrawings({ chart, series, canvas, tool, undo, status, getData, getInterval }) {
+export function createDrawings({ chart, series, canvas, tool, undo, status, getData, getInterval, getReplayTime }) {
   let context = '', drawings = [], points = [], hover = null;
   const key = () => `pivot-drawings-v1:${context}`;
   const say = text => { status.textContent = text; };
@@ -47,6 +47,9 @@ export function createDrawings({ chart, series, canvas, tool, undo, status, getD
     return x === null || y === null ? null : { x, y };
   }
   function render(ctx, drawing, width, height) {
+    const replayTime = getReplayTime();
+    const visibleAt = Number.isFinite(drawing.replayCreatedAt) ? drawing.replayCreatedAt : Math.max(...drawing.points.map(p => p.time));
+    if (replayTime !== null && visibleAt > replayTime) return;
     const xy = drawing.points.map(coordinate);
     if (xy.some(p => !p)) return;
     const [a, b, c] = xy;
@@ -76,7 +79,7 @@ export function createDrawings({ chart, series, canvas, tool, undo, status, getD
     canvas.width = Math.round(rect.width * ratio); canvas.height = Math.round(rect.height * ratio);
     const ctx = canvas.getContext('2d'); ctx.scale(ratio, ratio);
     for (const item of drawings) render(ctx, item, rect.width, rect.height);
-    if (hover && points.length && pointCounts[tool.value] === 2) render(ctx, { type: tool.value, points: [points[0], hover] }, rect.width, rect.height);
+    if (hover && points.length && pointCounts[tool.value] === 2) render(ctx, { type: tool.value, points: [points[0], hover], replayCreatedAt: getReplayTime() }, rect.width, rect.height);
   }
   tool.addEventListener('change', () => {
     points = []; hover = null; canvas.classList.toggle('active', tool.value !== 'cursor');
@@ -95,7 +98,8 @@ export function createDrawings({ chart, series, canvas, tool, undo, status, getD
         points = []; say(tool.value === 'long' ? 'For a long, stop must be below entry and target above it. Try again.' : 'For a short, stop must be above entry and target below it. Try again.');
         return;
       }
-      drawings.push({ type: tool.value, points }); points = []; hover = null; save();
+      const replayCreatedAt = getReplayTime();
+      drawings.push(replayCreatedAt === null ? { type: tool.value, points } : { type: tool.value, points, replayCreatedAt }); points = []; hover = null; save();
       tool.value = 'cursor'; tool.dispatchEvent(new Event('change'));
     } else if (['long', 'short'].includes(tool.value)) say(points.length === 1 ? 'Click the stop and right edge of the position.' : 'Click the target price.');
     draw();

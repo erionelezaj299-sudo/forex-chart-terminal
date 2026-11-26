@@ -10,6 +10,10 @@ To use [OANDA](https://developer.oanda.com/rest-live-v20/introduction/), select 
 
 The chart displays a countdown until the current candle's scheduled close; if no newer candle is available after that time, it says the candle has closed. Use the fullscreen button to expand the terminal (or the page-sized fallback when the browser denies native fullscreen).
 
+## Bar replay
+
+Select **Replay** to step or play through the currently loaded completed bars, or use the slider to choose a position. Replay uses the selected provider's limited history, not TradingView data; the indicator is the existing approximate port. Structure and profile are recalculated at each step, and premium/discount uses only completed higher-timeframe candles to avoid future data. Older 1m volume can be unavailable, so the profile falls back to chart-bar volume. The live watchlist prices are hidden during replay. Drawings created during replay are hidden before their creation bar; existing drawings are hidden until their anchor bars appear, but may still reflect future analysis. Exit replay to reload live data. Changing symbol, timeframe, provider or indicator settings also exits replay.
+
 ## Drawing tools
 
 The left drawing toolbar provides trend, horizontal and vertical lines, rectangles, Fibonacci retracements, and long/short risk-reward drawings. For a position, click entry, then stop/right edge, then target. These are visual annotations only and never place orders. Drawings are stored in browser local storage by source and pair, with Undo to remove the latest; Esc cancels an unfinished drawing. Existing drawings cannot yet be edited individually, and the complete TradingView drawing suite is not included.
