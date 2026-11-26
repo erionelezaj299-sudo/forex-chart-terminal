@@ -1,12 +1,11 @@
 import { calculateStructure, calculateVolumeProfile, calculateHigherTimeframeRange, higherTimeframeStatus, profileCandles, DEFAULT_SETTINGS } from './indicator.js?v=20261123b';
-import { fetchCandles, fetchWatchlistQuotes } from './market-data.js?v=20261126c';
+import { fetchCandles, fetchWatchlistQuotes } from './market-data.js?v=20261126d';
 import { parseLiveTick, updateCurrentCandle } from './live-data.js';
 import { drawStructureLine } from './overlays.js';
 import { GROUPS } from './settings.js';
 import { fetchOandaInstruments, streamOandaQuotes } from './oanda.js';
 import { candleEnd, candleCountdown } from './candle-clock.js';
 import { createDrawings } from './drawings.js';
-import { forexFourHourStart } from './forex-session.js';
 
 const currencies = { AUD: 'Australian Dollar', CAD: 'Canadian Dollar', CHF: 'Swiss Franc', EUR: 'Euro', GBP: 'British Pound', JPY: 'Japanese Yen', NZD: 'New Zealand Dollar', USD: 'US Dollar', XAU: 'Gold' };
 const symbols = ['EURUSD','GBPUSD','USDJPY','USDCHF','USDCAD','AUDUSD','NZDUSD','EURAUD','EURCAD','EURCHF','EURGBP','EURJPY','EURNZD','GBPAUD','GBPCAD','GBPCHF','GBPJPY','GBPNZD','AUDCAD','AUDCHF','AUDJPY','AUDNZD','CADCHF','CADJPY','CHFJPY','NZDCAD','NZDCHF','NZDJPY','XAUUSD'];
@@ -61,7 +60,7 @@ function symbolText() {
   const symbol = select.value, base = symbol.slice(0, 3), quote = symbol.slice(3);
   $('pair-title').textContent = symbol;
   $('fib-label').textContent = `Fib ${options.fibRatio}`;
-  $('pair-description').textContent = `${currencies[base]} / ${currencies[quote]} · ${intervals.find(x => x[1] === interval)[2]} · ${provider === 'biquote' ? 'biquote' : provider === 'oanda' ? 'OANDA' : 'Twelve Data'}${provider === 'biquote' && interval === '4h' ? ' · NY-aligned, limited history' : ''}`;
+  $('pair-description').textContent = `${currencies[base]} / ${currencies[quote]} · ${intervals.find(x => x[1] === interval)[2]} · ${provider === 'biquote' ? 'biquote' : provider === 'oanda' ? 'OANDA' : 'Twelve Data'}`;
   document.querySelector('.pair-tag').textContent = base === 'XAU' ? 'METAL' : 'FOREX';
 }
 function initChart() {
@@ -168,8 +167,9 @@ async function load({ background = false } = {}) {
     series.applyOptions({ priceFormat: { type: 'price', precision: digits, minMove: 10 ** -digits } });
     series.setData(data);
     if (!background) {
+      chart.applyOptions({ width: $('chart').clientWidth, height: $('chart').clientHeight });
       chart.priceScale('right').applyOptions({ autoScale: true });
-      chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, data.length - 120), to: data.length + 20 });
+      chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, data.length - 100), to: data.length + 12 });
     }
     const last = data[data.length - 1], prev = data[data.length - 2];
     $('last-price').textContent = last.close.toFixed(digits);
@@ -190,7 +190,7 @@ async function load({ background = false } = {}) {
     const minute = outcomes[2].status === 'fulfilled' ? outcomes[2].value : null;
     const price = source !== 'twelvedata' && latestTick ? latestTick.price : options.use1mPrice && minute?.length ? minute[minute.length - 1].close : last.close;
     const details = [];
-    if (source === 'biquote') details.push('4H uses New York-aligned hourly candles. History is limited; incomplete 4H bars are omitted. Prices and daily candles may differ from TradingView.');
+    if (source === 'biquote') details.push('biquote prices and 4H candle timing differ from TradingView ICE.');
     if (options.use1mPrice && !minute) details.push(`1m price unavailable; using chart close${outcomes[2].reason ? ` (${outcomes[2].reason.message})` : ''}.`);
     outcomes.slice(0, 2).forEach((outcome, i) => {
       const element = $(i === 0 ? 'pd-4h' : 'pd-1d');
@@ -321,14 +321,6 @@ function updateStreamStatus() {
 }
 function applyTick(tick) {
   if (provider !== 'biquote' || tick.symbol !== select.value || Date.now() / 1000 - tick.time > 30) return;
-  if (interval === '4h' && data.length && forexFourHourStart(tick.time) > data[data.length - 1].time) {
-    $('last-price').textContent = tick.price.toFixed(tick.symbol.endsWith('JPY') || tick.symbol.startsWith('XAU') ? 3 : 5);
-    if (!document.hidden && !refreshRunning && Date.now() - lastCandleRollover > 15000) {
-      lastCandleRollover = Date.now(); refreshRunning = true;
-      load({ background: true }).finally(() => { refreshRunning = false; });
-    }
-    return;
-  }
   const updated = updateCurrentCandle(data, tick, intervalSeconds[interval]);
   if (!updated) return;
   if (updated.time === data[data.length - 1].time) data[data.length - 1] = updated;
@@ -341,16 +333,7 @@ function applyTick(tick) {
   if (prev) $('price-change').textContent = `${tick.price >= prev.close ? '+' : ''}${((tick.price / prev.close - 1) * 100).toFixed(2)}% vs previous candle`;
   for (let i = 0; i < 2; i++) {
     if (!htfCandles[i] || !options.premiumEnabled) continue;
-    const candles = htfCandles[i];
-    if (i === 0 && forexFourHourStart(tick.time) > candles[candles.length - 1].time) {
-      $('pd-4h').textContent = 'Updating…';
-      if (!document.hidden && !refreshRunning && Date.now() - lastCandleRollover > 15000) {
-        lastCandleRollover = Date.now(); refreshRunning = true;
-        load({ background: true }).finally(() => { refreshRunning = false; });
-      }
-      continue;
-    }
-    const bar = updateCurrentCandle(candles, tick, i === 0 ? 14400 : 86400);
+    const candles = htfCandles[i], bar = updateCurrentCandle(candles, tick, i === 0 ? 14400 : 86400);
     if (!bar) continue;
     if (bar.time === candles[candles.length - 1].time) candles[candles.length - 1] = bar; else candles.push(bar);
     const range = calculateHigherTimeframeRange(candles, i === 0 ? Math.max(2, options.sensitivity4h - 1) : options.sensitivity1d, options.closeThreshold);

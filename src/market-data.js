@@ -1,6 +1,5 @@
 import { parseCandles } from './indicator.js';
 import { fetchOandaCandles, fetchOandaQuotes } from './oanda.js';
-import { aggregateForexFourHour } from './forex-session.js';
 
 const BIQUOTE_INTERVALS = {
   '1min': '1m', '5min': '5m', '15min': '15m', '30min': '30m',
@@ -28,8 +27,7 @@ export async function fetchCandles(source, symbol, timeframe, key, signal, size 
   if (source === 'oanda') return fetchOandaCandles(key, symbol, timeframe, signal, size);
   let url;
   if (source === 'biquote') {
-    const requestTimeframe = timeframe === '4h' ? '1h' : timeframe;
-    const params = new URLSearchParams({ interval: BIQUOTE_INTERVALS[requestTimeframe], limit: String(timeframe === '4h' ? 1000 : Math.min(size, 1000)) });
+    const params = new URLSearchParams({ interval: BIQUOTE_INTERVALS[timeframe], limit: String(Math.min(size, 1000)) });
     url = `https://biquote.io/api/${encodeURIComponent(symbol)}/ohlc?${params}`;
   } else if (source === 'twelvedata') {
     const params = new URLSearchParams({ symbol: `${symbol.slice(0, 3)}/${symbol.slice(3)}`, interval: timeframe, outputsize: String(size), timezone: 'UTC', apikey: key });
@@ -39,11 +37,7 @@ export async function fetchCandles(source, symbol, timeframe, key, signal, size 
   if (!response.ok) throw new Error(`${source === 'biquote' ? 'biquote' : 'Twelve Data'} returned HTTP ${response.status}.`);
   const json = await response.json();
   if (json.status === 'error' || json.code) throw new Error(json.message || 'The data provider rejected the request.');
-  if (source === 'biquote') {
-    const candles = parseBiquoteCandles(json, symbol, timeframe === '4h' ? '1h' : timeframe);
-    return timeframe === '4h' ? aggregateForexFourHour(candles).slice(-size) : candles;
-  }
-  return parseCandles(json.values);
+  return source === 'biquote' ? parseBiquoteCandles(json, symbol, timeframe) : parseCandles(json.values);
 }
 
 export async function fetchWatchlistQuotes(source, symbols, key, signal) {
