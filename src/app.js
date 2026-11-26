@@ -1,11 +1,11 @@
-import { calculateStructure, calculateVolumeProfile, calculateHigherTimeframeRange, higherTimeframeStatus, profileCandles, DEFAULT_SETTINGS } from './indicator.js?v=20261123b';
+import { calculateStructure, calculateVolumeProfile, calculateHigherTimeframeRange, higherTimeframeStatus, profileCandles, DEFAULT_SETTINGS } from './indicator.js?v=20261126g';
 import { fetchCandles, fetchWatchlistQuotes } from './market-data.js?v=20261126d';
 import { parseLiveTick, updateCurrentCandle } from './live-data.js';
 import { drawStructureLine } from './overlays.js';
 import { GROUPS } from './settings.js';
 import { fetchOandaInstruments, streamOandaQuotes } from './oanda.js';
 import { candleEnd, candleCountdown } from './candle-clock.js';
-import { createDrawings } from './drawings.js?v=20261126f';
+import { createDrawings } from './drawings.js?v=20261126g';
 import { replayableCandles, replaySnapshot } from './replay.js?v=20261126f';
 
 const currencies = { AUD: 'Australian Dollar', CAD: 'Canadian Dollar', CHF: 'Swiss Franc', EUR: 'Euro', GBP: 'British Pound', JPY: 'Japanese Yen', NZD: 'New Zealand Dollar', USD: 'US Dollar', XAU: 'Gold' };
@@ -65,6 +65,15 @@ drawingButtons.forEach(button => button.addEventListener('click', () => {
 function setPremiumStatus(element, value) {
   element.textContent = value;
   element.dataset.state = value.toLowerCase();
+}
+function setProfileStatus(value) {
+  $('vp-status').textContent = value;
+  $('vp-quality').textContent = `Profile: ${value.toLowerCase()}`;
+}
+function setHistoryStatus(candles) {
+  $('history-status').textContent = candles.length
+    ? `${candles.length.toLocaleString()} bars · from ${new Date(candles[0].time * 1000).toISOString().slice(0, 10)} UTC`
+    : 'History unavailable';
 }
 function setStatus(text, state = '') { $('data-status').className = `data-status ${state}`; $('data-status').innerHTML = '<i></i>'; $('data-status').append(document.createTextNode(text)); }
 function message(title, text, button = false) {
@@ -174,15 +183,17 @@ async function load({ background = false } = {}) {
   $('source-name').textContent = source === 'biquote' ? 'BIQUOTE' : source === 'oanda' ? 'OANDA' : 'TWELVE DATA';
   if (!background) {
     series.setData([]); data = []; structure = null; profile = null; htfCandles = [null, null]; minuteCandles = null; latestTick = null; draw();
-    $('last-price').textContent = '—'; $('price-change').textContent = '—'; $('structure').textContent = '—'; $('fib-value').textContent = '—'; setPremiumStatus($('pd-4h'), '—'); setPremiumStatus($('pd-1d'), '—'); $('vp-status').textContent = '—'; $('data-details').textContent = '';
+    $('last-price').textContent = '—'; $('price-change').textContent = '—'; $('structure').textContent = '—'; $('fib-value').textContent = '—'; setPremiumStatus($('pd-4h'), '—'); setPremiumStatus($('pd-1d'), '—'); setProfileStatus('Calculating'); setHistoryStatus([]); $('data-details').textContent = '';
   }
   updateCandleClock();
-  if ((source === 'twelvedata' || source === 'oanda') && !key) { setStatus('Not connected'); message('Your chart is ready', `Connect your ${source === 'oanda' ? 'OANDA account' : 'Twelve Data API key'} to start exploring.`, true); return; }
+  if ((source === 'twelvedata' || source === 'oanda') && !key) { setStatus('Not connected'); setProfileStatus('Unavailable'); message('Your chart is ready', `Connect your ${source === 'oanda' ? 'OANDA account' : 'Twelve Data API key'} to start exploring.`, true); return; }
   if (!background) { setStatus('Loading'); message('Loading market data', `Fetching candles from ${source === 'biquote' ? 'biquote' : source === 'oanda' ? 'OANDA' : 'Twelve Data'}…`); }
   try {
-    const result = await fetchCandles(source, symbol, interval, key, signal);
+    const historySize = source === 'biquote' ? 500 : 5000;
+    const result = await fetchCandles(source, symbol, interval, key, signal, historySize);
     if (signal.aborted) return;
     data = result; structure = calculateStructure(data, options);
+    setHistoryStatus(data);
     const digits = symbol.endsWith('JPY') || symbol.startsWith('XAU') ? 3 : 5;
     series.applyOptions({ priceFormat: { type: 'price', precision: digits, minMove: 10 ** -digits } });
     series.setData(data);
@@ -203,7 +214,7 @@ async function load({ background = false } = {}) {
     const higher = ['4h', '1day'];
     const needMinute = options.use1mPrice || (options.showVp && options.vpUseLtf && interval !== '1min');
     const outcomes = await Promise.allSettled([
-      ...higher.map(tf => tf === interval ? Promise.resolve(result) : fetchCandles(source, symbol, tf, key, signal)),
+      ...higher.map(tf => tf === interval ? Promise.resolve(result) : fetchCandles(source, symbol, tf, key, signal, historySize)),
       needMinute ? (interval === '1min' ? Promise.resolve(result) : fetchCandles(source, symbol, '1min', key, signal, options.showVp && options.vpUseLtf ? 5000 : 1)) : Promise.resolve(null),
     ]);
     if (signal.aborted) return;
@@ -230,17 +241,18 @@ async function load({ background = false } = {}) {
     if (options.showVp && structure.fib) {
       const end = options.vpEndAtExtreme ? structure.fib.extremeIndex : data.length - 1;
       const leg = data.slice(structure.fib.start, end + 1);
-      const selected = options.vpUseLtf && interval !== '1min' && minute ? profileCandles(leg, minute, intervalSeconds[interval]) : { candles: leg, fallback: options.vpUseLtf && interval !== '1min' ? leg.length : 0 };
+      const selected = options.vpUseLtf && interval !== '1min' && minute ? profileCandles(leg, minute, intervalSeconds[interval], Date.now() / 1000, c => candleEnd(c.time, interval, source)) : { candles: leg, fallback: options.vpUseLtf && interval !== '1min' ? leg.length : 0 };
       const volumeCandles = selected.candles;
       profile = calculateVolumeProfile(volumeCandles, structure.fib, options);
       if (source === 'biquote') details.push('Profile uses biquote tick counts, not traded volume.');
       if (source === 'oanda') details.push('Profile uses OANDA price-update counts, not exchange-wide traded volume.');
       if (selected.fallback) details.push(`Incomplete 1m coverage for ${selected.fallback} chart bar(s); chart-bar volume is used, so POC is approximate.`);
       if (!minute && options.vpUseLtf && interval !== '1min') details.push(`1m intrabars unavailable; chart-bar volume is used when available${outcomes[2].status === 'rejected' ? ` (${outcomes[2].reason.message})` : ''}.`);
-      $('vp-status').textContent = profile.error ? 'Unavailable' : selected.fallback || source === 'biquote' || source === 'oanda' ? 'Approximate' : 'Available';
+      setProfileStatus(profile.error ? 'Unavailable' : selected.fallback || source === 'biquote' || source === 'oanda' ? 'Approximate' : 'Available');
       if (profile.error) details.push(`Volume profile: ${profile.error}`);
-    } else $('vp-status').textContent = options.showVp ? 'No active leg' : 'Disabled';
+    } else setProfileStatus(options.showVp ? 'No active leg' : 'Disabled');
     $('data-details').textContent = details.join(' ');
+    $('vp-quality').title = details.join(' ');
     if (source === 'biquote' && latestTick) applyTick(latestTick);
     if (source === 'oanda' && latestTick) applyOandaQuote(latestTick);
     $('replay-toggle').disabled = replayableCandles(data, interval, provider).length < 2;
@@ -248,7 +260,7 @@ async function load({ background = false } = {}) {
   } catch (error) {
     if (error.name === 'AbortError') return;
     if (background) { setStatus('Candle refresh failed', 'error'); $('data-details').textContent = `Candle refresh failed: ${error.message}`; }
-    else { setStatus('Data unavailable', 'error'); message('Unable to load market data', error.message, true); }
+    else { setStatus('Data unavailable', 'error'); setProfileStatus('Unavailable'); message('Unable to load market data', error.message, true); }
   } finally {
     if (!signal.aborted && !replay) $('replay-toggle').disabled = replayableCandles(data, interval, provider).length < 2;
   }
@@ -270,6 +282,7 @@ function renderReplay() {
   const index = Number($('replay-position').value);
   const snapshot = replaySnapshot(replay.candles, index, replay.higher, replay.minute, interval, provider);
   data = snapshot.visible;
+  setHistoryStatus(data);
   structure = calculateStructure(data, options);
   series.setData(data);
   const last = data[data.length - 1], prev = data[data.length - 2];
@@ -297,15 +310,16 @@ function renderReplay() {
     const end = options.vpEndAtExtreme ? structure.fib.extremeIndex : data.length - 1;
     const leg = data.slice(structure.fib.start, end + 1);
     const selected = options.vpUseLtf && interval !== '1min' && snapshot.minute
-      ? profileCandles(leg, snapshot.minute, intervalSeconds[interval], snapshot.cutoff - 1)
+      ? profileCandles(leg, snapshot.minute, intervalSeconds[interval], snapshot.cutoff - 1, c => candleEnd(c.time, interval, provider))
       : { candles: leg, fallback: options.vpUseLtf && interval !== '1min' ? leg.length : 0 };
     profile = calculateVolumeProfile(selected.candles, structure.fib, options);
-    $('vp-status').textContent = profile.error ? 'Unavailable' : selected.fallback || provider !== 'twelvedata' ? 'Approximate' : 'Available';
+    setProfileStatus(profile.error ? 'Unavailable' : selected.fallback || provider !== 'twelvedata' ? 'Approximate' : 'Available');
     if (profile.error) details.push(`Volume profile: ${profile.error}`);
     else if (selected.fallback) details.push(`Incomplete 1m history for ${selected.fallback} chart bar(s); chart-bar volume is used.`);
     if (provider !== 'twelvedata') details.push('Profile uses provider price-update counts, not exchange-wide volume.');
-  } else $('vp-status').textContent = options.showVp ? 'No active leg' : 'Disabled';
+  } else setProfileStatus(options.showVp ? 'No active leg' : 'Disabled');
   $('data-details').textContent = details.join(' ');
+  $('vp-quality').title = details.join(' ');
   setStatus('Replay · historical bars');
   updateCandleClock();
   chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, data.length - 70), to: data.length + 22 });

@@ -8,10 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261126f">
+  <link rel="stylesheet" href="styles.css?v=20261126g">
   <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js" defer></script>
-  <script type="module" src="./src/app.js?v=20261126f"></script>
+  <script type="module" src="./src/app.js?v=20261126g"></script>
 </head>
 <body>
   <main class="layout">
@@ -59,7 +59,7 @@
               </details>
               <div class="chart-message" id="chart-message"><div class="message-icon">↗</div><strong>Your chart is ready</strong><span>Connect your market data to start exploring.</span><button id="connect-button">Connect data <span>↗</span></button></div>
             </div>
-            <div class="chart-footer"><span id="drawing-status" aria-live="polite">Drawings are for analysis only; no orders are placed.</span><span>Prices shown in UTC</span></div>
+            <div class="chart-footer"><span id="drawing-status" aria-live="polite">Drawings are for analysis only; no orders are placed.</span><span id="vp-quality">Profile: calculating</span><span id="history-status">History unavailable</span></div>
           </div>
           <aside class="insights">
             <div class="section-head"><h2>Watchlist</h2><button id="watchlist-refresh" class="watchlist-refresh" type="button" aria-label="Refresh watchlist quotes" title="Refresh watchlist quotes">↻</button></div>

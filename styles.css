@@ -61,7 +61,7 @@
 .checklist label span{font-size:10px}
 .trade-score{display:flex;align-items:center;gap:20px;padding:8px 3px;font-size:12px}
 .trade-score strong{min-width:15px}
-.chart-footer{flex-shrink:0;min-height:28px;padding:7px 12px;font-size:10px;font-weight:400;letter-spacing:0;border-top:1px solid #e5e7eb;color:#7a838e}
+.chart-footer{flex-shrink:0;min-height:28px;padding:7px 12px;font-size:10px;font-weight:400;letter-spacing:0;border-top:1px solid #e5e7eb;color:#7a838e;flex-wrap:wrap;gap:4px 12px}
 .insights{display:flex;flex-direction:column;min-height:0;overflow:hidden;border-left:1px solid #e3e5e9;border-top:0;padding:0}
 .section-head{padding:12px 14px;border-bottom:1px solid #eaecf0}
 .section-head h2{font-size:14px}

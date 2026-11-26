@@ -13,7 +13,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   showLiquidity: true, liquiditySensitivity: 2, showFractals: true, filterBW: true,
   majorOnly: true, majorThreshold: 1.5, majorLookback: 10,
   premiumEnabled: true, sensitivity4h: 5, sensitivity1d: 5, use1mPrice: true,
-  showVp: true, vpRows: 128, vpUseLtf: true, vpEndAtExtreme: true, vpWidth: 18, vpOffset: 13, vpPoc: true,
+  showVp: true, vpRows: 48, vpUseLtf: true, vpEndAtExtreme: true, vpWidth: 18, vpOffset: 13, vpPoc: true,
   vpColor: '#808080', vpPocColor: '#808080', vpPocLineColor: '#000000', vpPocLineStyle: 'dashed', vpPocLineWidth: 2,
 });
 
@@ -192,13 +192,19 @@ export function higherTimeframeStatus(range, price) {
   return price > range.mid ? 'Premium' : price < range.mid ? 'Discount' : 'Neutral';
 }
 
-export function profileCandles(leg, minute, seconds, now = Date.now() / 1000) {
+export function profileCandles(leg, minute, seconds, now = Date.now() / 1000, getEnd = c => c.time + seconds) {
   let fallback = 0;
+  let start = 0;
   const candles = leg.flatMap(c => {
-    const bars = minute.filter(m => m.time >= c.time && m.time < c.time + seconds);
-    const end = Math.min(c.time + seconds, Math.floor(now / 60) * 60 + 60);
+    const candleEnd = getEnd(c);
+    while (start < minute.length && minute[start].time < c.time) start++;
+    let finish = start;
+    while (finish < minute.length && minute[finish].time < candleEnd) finish++;
+    const bars = minute.slice(start, finish);
+    start = finish;
+    const end = Math.min(candleEnd, Math.floor(now / 60) * 60 + 60);
     const expected = Math.max(0, Math.ceil((end - c.time) / 60));
-    const complete = expected > 0 && bars.length === expected && bars.every((bar, i) => bar.time === c.time + i * 60);
+    const complete = expected > 0 && bars.length === expected && bars.every((bar, i) => bar.time === c.time + i * 60 && Number.isFinite(bar.volume) && bar.volume >= 0);
     if (complete) return bars;
     fallback++;
     return [c];

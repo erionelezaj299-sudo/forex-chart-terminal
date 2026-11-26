@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateStructure, calculateVolumeProfile, calculateHigherTimeframeRange, higherTimeframeStatus, profileCandles, findFibExtreme, parseCandles, rangeStatus } from '../src/indicator.js';
+import { candleEnd } from '../src/candle-clock.js';
 
 test('parses UTC candles in chronological order and rejects malformed data', () => {
   const candles = parseCandles([
@@ -87,6 +88,31 @@ test('profile uses whole-bar fallback for gaps inside lower-timeframe coverage',
   assert.equal(selected.fallback, 1);
   assert.equal(selected.candles.length, 6);
   assert.equal(selected.candles[5], leg[1]);
+});
+
+test('profile falls back to chart volume when an intrabar lacks volume', () => {
+  const leg = [{ time: 0, high: 10, low: 0, volume: 100 }];
+  const minute = [0, 60, 120, 180, 240].map(time => ({ time, volume: 1 }));
+  delete minute[2].volume;
+  const selected = profileCandles(leg, minute, 300, 300);
+  assert.equal(selected.fallback, 1);
+  assert.deepEqual(selected.candles, leg);
+});
+
+test('profile uses actual OANDA daily boundaries on daylight-saving transition', () => {
+  const start = Date.parse('2024-03-09T22:00:00Z') / 1000;
+  const leg = [{ time: start, volume: 1380 }];
+  const minute = Array.from({ length: 1380 }, (_, i) => ({ time: start + i * 60, volume: 1 }));
+  const end = candleEnd(start, '1day', 'oanda');
+  const selected = profileCandles(leg, minute, 86400, end, c => candleEnd(c.time, '1day', 'oanda'));
+  assert.equal(selected.fallback, 0);
+  assert.equal(selected.candles.length, 1380);
+});
+
+test('default profile places volume in the Pine script row and finds its midpoint', () => {
+  const profile = calculateVolumeProfile([{ low: 20, high: 22, volume: 100 }], { zero: 96, one: 0 });
+  assert.equal(profile.pocPrice, 21);
+  assert.equal(profile.bins[10], 100);
 });
 
 test('fib extreme matches Pine tie handling for the profile end bar', () => {
